@@ -3,7 +3,7 @@
 set -e
 
 echo "[*] Installing Python dependencies..."
-pip3 install -r requirements.txt
+pip3 install --break-system-packages -r requirements.txt
 
 echo "[*] Checking required tools..."
 TOOLS="airmon-ng airodump-ng aireplay-ng aircrack-ng hcxdumptool hcxpcapngtool hostapd dnsmasq hashcat john"
