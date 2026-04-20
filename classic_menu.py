@@ -3261,29 +3261,53 @@ async def menu_output():
 
 
 async def menu_anon():
-    """Anonymitäts-Manager — Tor, proxychains, IP-Leak-Check."""
+    """Anonymitäts & OPSEC Manager."""
     while True:
         banner()
-        section("🧅  ANONYMITÄT", "Tor · proxychains · IP-Leak-Check")
-        from core.anon import anon_status, get_real_ip
-        s = anon_status()
-        tor_badge  = f"{G}AKTIV ✓{R}" if s["tor"] else f"{RD}INAKTIV ✗{R}"
-        pc_badge   = f"{G}✓{R}" if s["proxychains"] else f"{RD}✗{R}"
-        print(f"  Tor-Status:     {tor_badge}")
+        from core.anon import anon_status
+        from core.opsec import opsec_score, killswitch_status
+        import subprocess as _sp
+
+        s      = anon_status()
+        ks     = killswitch_status()
+        score, warnings = opsec_score()
+        hn     = _sp.run(["hostname"], capture_output=True, text=True).stdout.strip()
+
+        # Score-Farbe
+        sc = G if score >= 80 else (Y if score >= 50 else RD)
+        ks_badge  = f"{G}AKTIV ✓{R}"   if ks          else f"{RD}INAKTIV ✗{R}"
+        tor_badge = f"{G}AKTIV ✓{R}"   if s["tor"]    else f"{RD}INAKTIV ✗{R}"
+        pc_badge  = f"{G}✓{R}"         if s["proxychains"] else f"{RD}✗{R}"
+
+        section("🧅  ANONYMITÄT & OPSEC", "Tor · Kill Switch · MAC · Hostname · Logs · Wipe")
+        print(f"  OPSEC-Score:    {sc}{B}{score}/100{R}")
+        print(f"  Tor:            {tor_badge}")
+        print(f"  Kill Switch:    {ks_badge}")
         print(f"  proxychains4:   {pc_badge}")
-        print()
-        menu_item("1", "🧅  Tor starten",              "🟢", "Traffic über Tor-Netzwerk anonymisieren")
-        menu_item("2", "🔄  Neue Tor-Identity",         "🟢", "Andere Exit-Node → neue IP")
-        menu_item("3", "⛔  Tor stoppen",               "🟡", "Direktverbindung reaktivieren")
-        menu_item("4", "🔍  IP & Leak Check",           "🟢", "Echte IP vs Tor-IP anzeigen")
-        menu_item("5", "⚙️   proxychains konfigurieren", "🟢", "Sicherstellen dass proxychains → Tor zeigt")
-        menu_item("0", "Back")
-        print()
-        print(f"  {DIM}Für vollen Schutz PenKit so starten:{R}")
-        print(f"  {C}  proxychains4 python3 classic_menu.py{R}")
+        print(f"  Hostname:       {DIM}{hn}{R}")
+        if warnings:
+            print()
+            for w in warnings:
+                print(f"  {RD}[!]{R} {w}")
         print()
 
-        choice = prompt("anon")
+        menu_item("1", "🧅  Tor starten",               "🟢", "Traffic über Tor anonymisieren")
+        menu_item("2", "🔄  Neue Tor-Identity",          "🟢", "Neue Exit-IP anfordern")
+        menu_item("3", "⛔  Tor stoppen",                "🟡", "Direktverbindung reaktivieren")
+        menu_item("4", "🔍  IP & DNS Leak Check",        "🟢", "Echte IP vs Tor-Exit-IP")
+        menu_item("5", "⚙️   proxychains konfigurieren",  "🟢", "Sicherstellen dass proxychains → Tor")
+        menu_item("6", "🔒  Kill Switch AKTIVIEREN",     "🔴", "Blockiert alles außer Tor — kein IP-Leak")
+        menu_item("7", "🔓  Kill Switch deaktivieren",   "🟡", "Normaler Traffic wieder erlaubt")
+        menu_item("8", "🎭  MAC-Adresse spoofing",       "🟠", "Hardware-ID ändern (alle Interfaces)")
+        menu_item("9", "💻  Hostname ändern",            "🟠", "Gerätename in Netzwerkscans verschleiern")
+        menu_item("L", "🗑️   Logs & History löschen",    "🟡", "System-Logs + Shell-History leeren")
+        menu_item("W", "💣  Session Wipe",               "🔴", "Alle Captures, Keys, Temp-Dateien löschen")
+        menu_item("0", "Back")
+        print()
+        print(f"  {DIM}Für maximalen Schutz:{R}  {C}proxychains4 python3 classic_menu.py{R}")
+        print()
+
+        choice = prompt("opsec")
         if choice == "0":
             return
         clr()
@@ -3291,18 +3315,98 @@ async def menu_anon():
         if choice == "1":
             from core.anon import start_tor
             await run_tool_live(start_tor())
+
         elif choice == "2":
             from core.anon import restart_tor
             await run_tool_live(restart_tor())
+
         elif choice == "3":
             from core.anon import stop_tor
             await run_tool_live(stop_tor())
+
         elif choice == "4":
             from core.anon import ip_leak_check
             await run_tool_live(ip_leak_check())
+
         elif choice == "5":
             from core.anon import setup_proxychains
             await run_tool_live(setup_proxychains())
+
+        elif choice == "6":
+            from core.opsec import killswitch_enable
+            await run_tool_live(killswitch_enable())
+
+        elif choice == "7":
+            from core.opsec import killswitch_disable
+            await run_tool_live(killswitch_disable())
+
+        elif choice == "8":
+            from core.opsec import mac_spoof_all
+            section("MAC SPOOFING", "Alle Interfaces — Hardware-ID randomisieren")
+            info_box([
+                "Ändert die MAC-Adresse aller Netzwerk-Interfaces.",
+                "Verhindert Rückverfolgung in Netzwerk-Logs.",
+                "",
+                "Empfohlen: vor jedem WiFi-Angriff ausführen.",
+                "Zurücksetzen: Option 8 nochmals → 'r' eingeben",
+            ])
+            print()
+            restore = ask("Zurücksetzen auf Original-MAC? [j/n]", "n")
+            if restore.lower() == "j":
+                from core.opsec import mac_spoof, _interfaces
+                for iface in _interfaces():
+                    await run_tool_live(mac_spoof(iface, restore=True))
+            else:
+                await run_tool_live(mac_spoof_all())
+
+        elif choice == "9":
+            from core.opsec import hostname_change, hostname_restore, FAKE_HOSTNAMES
+            section("HOSTNAME ÄNDERN", "Gerätename in Netzwerkscans verschleiern")
+            info_box([
+                "Dein Hostname erscheint in Netzwerkscans (nmap, SMB, LLMNR).",
+                "Zufälliger Windows-ähnlicher Name macht Rückverfolgung schwerer.",
+                "",
+                f"Beispiele: {', '.join(FAKE_HOSTNAMES[:4])}...",
+            ])
+            print()
+            custom = ask("Eigener Name (Enter = zufällig)", "")
+            restore = ask("Zurück zu 'kali'? [j/n]", "n")
+            if restore.lower() == "j":
+                await run_tool_live(hostname_restore())
+            else:
+                await run_tool_live(hostname_change(custom))
+
+        elif choice in ("l", "L"):
+            from core.opsec import clean_logs, clean_history
+            section("LOGS & HISTORY LÖSCHEN", "System-Logs + Shell-History leeren")
+            info_box([
+                "Löscht:",
+                "  → /var/log/auth.log, syslog, kern.log, wtmp, btmp",
+                "  → ~/.bash_history, ~/.zsh_history",
+                "  → Zuletzt geöffnete Dateien",
+                "",
+                "Empfohlen: nach jeder Session ausführen.",
+            ])
+            print()
+            await run_tool_live(clean_logs())
+            print()
+            await run_tool_live(clean_history())
+
+        elif choice in ("w", "W"):
+            from core.opsec import session_wipe
+            section("SESSION WIPE", "Alle temporären Dateien sicher löschen")
+            info_box([
+                "Löscht sicher:",
+                "  → Alle .pcap / .cap / .hccapx Captures",
+                "  → Temporäre Keys (.pem, .key)",
+                "  → /tmp PenKit-Dateien",
+                "  → Browser-Cache",
+                "",
+                "Optional: auch ~/penkit-output/ komplett löschen",
+            ])
+            print()
+            wipe_out = ask("Auch ~/penkit-output/ löschen? [j/n]", "n")
+            await run_tool_live(session_wipe(wipe_out.lower() == "j"))
 
         wait_key()
 

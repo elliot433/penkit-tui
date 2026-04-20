@@ -97,10 +97,18 @@ def anon_status() -> dict:
 def status_line() -> str:
     """Einzeilige Statusanzeige für das Banner."""
     s = anon_status()
-    if s["tor"]:
-        return "\033[1;32m  [🧅 TOR AKTIV — Traffic anonymisiert]\033[0m"
+    try:
+        from core.opsec import killswitch_status
+        ks = killswitch_status()
+    except Exception:
+        ks = False
+
+    if s["tor"] and ks:
+        return "\033[1;32m  [🧅 TOR AKTIV + 🔒 KILL SWITCH — Maximale Anonymität]\033[0m"
+    elif s["tor"]:
+        return "\033[1;33m  [🧅 TOR AKTIV — ⚠️  Kill Switch inaktiv → N für vollen Schutz]\033[0m"
     else:
-        return "\033[1;31m  [⚠️  KEIN TOR — Deine echte IP ist sichtbar! → N drücken]\033[0m"
+        return "\033[1;31m  [⚠️  KEIN TOR — Echte IP sichtbar! → N drücken]\033[0m"
 
 
 # ── Tor starten/stoppen ───────────────────────────────────────────────────────
