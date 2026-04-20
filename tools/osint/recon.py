@@ -103,7 +103,7 @@ class OSINTRecon:
                     self._result.ips.append(ip)
                     yield f"[+] IP: {ip}"
 
-            elif line.strip():
+            if not email_m and not ip_m and f".{domain}" not in line and line.strip():
                 yield line
 
         yield f"\n[+] Harvest done: {len(self._result.emails)} emails, {len(self._result.subdomains)} subdomains, {len(self._result.ips)} IPs"
