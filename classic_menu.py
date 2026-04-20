@@ -153,6 +153,7 @@ async def menu_wifi():
         menu_item("8", "Reaver WPS Brute-Force",     "🔴", "WPS online brute-force (2-10h)")
         menu_item("9", "Beacon Flood",               "🟠", "Tausende Fake-SSIDs senden (mdk4)")
         menu_item("A", "AUTO-CRACK PIPELINE",        "🔴", "Capture → Deauth → Handshake → Crack in einem Schritt")
+        menu_item("C", "🔥  AUTO-COMBO (NEU!)",     "⛔", "Deauth + Evil Twin + Captive Portal + Verify + Telegram-Alert")
         menu_item("0", "Back")
 
         choice = prompt("wifi")
@@ -301,6 +302,44 @@ async def menu_wifi():
                 await run_tool_live(t.auto_crack_pipeline(bssid, channel, wordlist))
             except KeyboardInterrupt:
                 await t.stop()
+
+        elif choice in ("c", "C"):
+            banner()
+            section("🔥  WIFI AUTO-COMBO", "Deauth + Evil Twin + Portal + Verify + Telegram")
+            info_box([
+                "Vollautomatische Angriffskette:",
+                "  1. Fake AP mit identischer SSID starten",
+                "  2. Clients vom echten AP deauthen (zwingen sich zu verbinden)",
+                "  3. Captive Portal: Opfer sieht Passwort-Dialog",
+                "  4. Passwort wird sofort angezeigt + optional per Telegram gesendet",
+                "  5. Passwort gegen echten AP verifizieren",
+                "",
+                "Wann klappt es:",
+                "  ✓ Wenn Signal des Fake-APs mindestens gleich stark",
+                "  ✓ Bei WPA2-PSK Netzwerken (Heimnetz, Büro)",
+                "  ✗ Bei WPA3, Enterprise-Auth, wenn Nutzer BSSID manuell prüft",
+            ])
+            print()
+            iface = ask("WiFi Interface (AP-Modus)", cfg.get("interface", "wlan0"))
+            print(f"  {DIM}Tipp: Option C (Scan) aus WiFi-Menü → BSSID/Kanal aus Ergebnis kopieren{R}")
+            ssid    = ask("Ziel SSID (exakt!)", required=True)
+            bssid   = ask("Ziel BSSID (AA:BB:CC:DD:EE:FF)", required=True)
+            channel = ask("Kanal", "6")
+            client  = ask("Client BSSID (leer = alle deauthen)", "FF:FF:FF:FF:FF:FF")
+            tg_tok  = ask("Telegram Bot-Token (leer = ohne Alert)", "")
+            tg_chat = ask("Telegram Chat-ID", "") if tg_tok else ""
+            print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+            if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
+                wait_key(); continue
+            print()
+            try:
+                from tools.wifi.auto_combo import WiFiAutoCombo
+                combo = WiFiAutoCombo(iface, tg_tok, tg_chat)
+                await run_tool_live(combo.run_combo(ssid, bssid, channel, client))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+            except Exception as e:
+                print(f"  {RD}[!] {e}{R}")
 
         wait_key()
 
@@ -524,6 +563,7 @@ async def menu_web():
         menu_item(" 8", "🎯  XSS Payload-Tester",          "🔴", "Payload-Bibliothek gegen URL testen")
         menu_item(" 9", "🍪  Cookie-Catcher starten",      "🔴", "Empfängt XSS-Callbacks (Cookies, Keys)")
         menu_item(" X", "📋  XSS Payloads anzeigen",       "🟡", "Alle Contexts: HTML, Attr, JS, WAF-Bypass")
+        menu_item(" S", "🏴‍☠️  Subdomain Takeover",          "🔴", "CNAME → tote Dienste → eigene Page platzieren")
         menu_item(" 0", "← Zurück", "")
 
         choice = prompt("web")
@@ -663,6 +703,35 @@ async def menu_web():
             print()
             from tools.web.xss_engine import show_payloads
             await run_tool_live(show_payloads("all", kali_ip))
+
+        elif choice in ("s", "S"):
+            banner()
+            section("🏴‍☠️  SUBDOMAIN TAKEOVER", "CNAME → nicht mehr existierende Dienste → übernehmen")
+            info_box([
+                "Prüft ob Subdomains auf tote externe Dienste zeigen:",
+                "  GitHub Pages, Netlify, Heroku, Vercel, AWS S3, Azure,",
+                "  Shopify, Zendesk, Fastly, WordPress.com, Steam, ...",
+                "",
+                "Wenn JA → du kannst diese Subdomain selbst belegen:",
+                "  → Phishing-Seite auf sub.opfer.com hosten",
+                "  → Cookies der Hauptdomain stehlen (same-origin!)",
+                "  → Vertrauenswürdige Domain missbrauchen",
+                "",
+                "Braucht: dig + optional subfinder (apt install subfinder)",
+            ])
+            print()
+            domain = ask("Ziel-Domain (firma.com)", required=True)
+            if not domain:
+                wait_key(); continue
+            sub_file = ask("Eigene Subdomain-Liste (leer = auto via crt.sh)", "")
+            print()
+            try:
+                from tools.web.subdomain_takeover import scan as takeover_scan
+                await run_tool_live(takeover_scan(domain, sub_file))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+            except Exception as e:
+                print(f"  {RD}[!] {e}{R}")
 
         elif choice == "6":
             banner()
@@ -959,6 +1028,10 @@ async def menu_osint():
         menu_item("B", "📧  Bulk E-Mail Breach Check",            "🟡", "Mehrere Mails auf einmal prüfen")
         menu_item("L", "🔑  LinkedIn / E-Mail Generator",         "🟡", "Mitarbeiterliste → Unternehmens-E-Mails")
         menu_item("P", "🔐  Passwort Breach Check",               "🟢", "Passwort sicher prüfen (k-Anonymity)")
+        menu_item("I", "📸  Instagram OSINT",                     "🟡", "Profil, Follower, Posts (instaloader)")
+        menu_item("T", "🎵  TikTok OSINT",                        "🟡", "Profil-Stats, Follower, Videos")
+        menu_item("X", "🐦  Twitter/X OSINT",                     "🟡", "Profil via Nitter (kein API-Key)")
+        menu_item("S", "💀  Credential Stuffing",                  "⛔", "Cred-Liste gegen Plattform testen")
         menu_item("0", "Back")
 
         choice = prompt("osint")
@@ -1122,6 +1195,90 @@ async def menu_osint():
             from tools.osint.breach_lookup import password_pwned_check
             await run_tool_live(password_pwned_check(pw))
 
+        elif choice in ("i", "I"):
+            banner()
+            section("📸  INSTAGRAM OSINT", "Profil-Infos, Follower, Posts via instaloader")
+            info_box([
+                "Liest öffentliche Profile ohne Login.",
+                "Für Follower-Liste: optionale Session-Datei angeben.",
+                "",
+                "Install: pip3 install instaloader",
+            ])
+            print()
+            username = ask("Instagram Username (ohne @)", required=True)
+            if not username:
+                wait_key(); continue
+            session = ask("Session-Datei (Enter = ohne Login)", "")
+            print()
+            from tools.osint.social_osint import instagram_profile, instagram_followers
+            await run_tool_live(instagram_profile(username))
+            if session:
+                await run_tool_live(instagram_followers(username, session))
+
+        elif choice in ("t", "T"):
+            banner()
+            section("🎵  TIKTOK OSINT", "Profil-Stats via HTTP-Scraping")
+            info_box([
+                "Liest öffentliche TikTok-Profile.",
+                "Zeigt: Follower, Likes, Video-Anzahl, Bio, verifiziert?",
+                "",
+                "Kein API-Key nötig.",
+            ])
+            print()
+            username = ask("TikTok Username (ohne @)", required=True)
+            if not username:
+                wait_key(); continue
+            print()
+            from tools.osint.social_osint import tiktok_profile
+            await run_tool_live(tiktok_profile(username))
+
+        elif choice in ("x", "X"):
+            banner()
+            section("🐦  TWITTER/X OSINT", "Profil via Nitter scrapen")
+            info_box([
+                "Liest Twitter/X-Profile über Nitter (kein API-Key nötig).",
+                "Zeigt: Tweets, Follower, Following, Bio, Joined.",
+                "",
+                "Standard-Instanz: nitter.net (kann überlastet sein)",
+                "Alternativen: nitter.privacydev.net, nitter.poast.org",
+            ])
+            print()
+            username = ask("Twitter/X Username (ohne @)", required=True)
+            if not username:
+                wait_key(); continue
+            nitter = ask("Nitter-Instanz (Enter = nitter.net)", "nitter.net")
+            print()
+            from tools.osint.social_osint import twitter_profile
+            await run_tool_live(twitter_profile(username, nitter))
+
+        elif choice in ("s", "S"):
+            banner()
+            section("💀  CREDENTIAL STUFFING", "Gestohlene Zugangsdaten gegen Plattformen testen")
+            info_box([
+                "WARNUNG: Nur auf Plattformen verwenden, für die du Autorisierung hast.",
+                "Illegal gegen fremde Accounts ohne Erlaubnis!",
+                "",
+                "Unterstützte Plattformen: instagram, discord",
+                "Format Credential-Datei: user:pass (eine pro Zeile)",
+                "Format Proxy-Datei:       ip:port (eine pro Zeile, optional)",
+            ])
+            print()
+            platform = ask("Plattform [instagram/discord]", "instagram")
+            cred_file = ask("Credential-Datei (user:pass)", required=True)
+            if not cred_file:
+                wait_key(); continue
+            proxy_file = ask("Proxy-Datei (optional, Enter = ohne)", "")
+            delay = ask_int("Delay zwischen Requests (Sekunden)", 3)
+            stop = ask("Bei erstem Treffer stoppen? [j/n]", "j")
+            print()
+            from tools.osint.social_osint import credential_stuff
+            await run_tool_live(credential_stuff(
+                platform, cred_file,
+                proxy_file or "",
+                delay,
+                stop.lower() == "j",
+            ))
+
         wait_key()
 
 
@@ -1269,7 +1426,7 @@ async def menu_phishing():
     menu_item(" 1", "🌐  Phishing-Server starten",      "⛔", "Startet Fake-Login lokal, zeigt Credentials live an")
     menu_item(" 2", "📧  Email-Kampagne senden",         "⛔", "Bulk-Phishing via SMTP mit HTML-Templates")
     menu_item(" 3", "🔗  GoPhish Integration",           "⛔", "Professionelle Kampagnen via GoPhish API")
-    menu_item(" 4", "📄  Verfügbare Seiten anzeigen",    "🟡", "Google, Microsoft, Instagram, Apple, Bank")
+    menu_item(" 4", "📄  Verfügbare Seiten anzeigen",    "🟡", "Google, Microsoft, Instagram, TikTok, Snapchat, Discord...")
     menu_item(" 5", "📋  Gespeicherte Credentials",      "🟡", "Zeigt alle gefangenen Passwörter aus letztem Run")
     print()
     menu_item(" 0", "← Zurück", "")
@@ -1297,8 +1454,14 @@ async def menu_phishing():
             "  instagram — Instagram",
             "  apple     — Apple ID / iCloud",
             "  bank      — Generisches Online-Banking",
+            "  tiktok    — TikTok Login",
+            "  snapchat  — Snapchat Login",
+            "  discord   — Discord Dark Mode",
+            "  twitter   — X / Twitter",
+            "  whatsapp  — WhatsApp Web Verifizierung",
+            "  steam     — Steam Login",
         ])
-        page = prompt("Seite [google/microsoft/instagram/apple/bank]  (Enter = google)") or "google"
+        page = prompt("Seite [google/microsoft/instagram/tiktok/snapchat/discord/twitter/whatsapp/steam/apple/bank]  (Enter = google)") or "google"
         info_box([
             "Port = auf welchem Port der Server läuft",
             "  8080 = Standard, kein root nötig",
@@ -1519,6 +1682,7 @@ async def menu_c2():
     menu_item(" 9", "🎣  Reverse Shell Listener",         "🔴", "Empfängt eingehende Shells (pwncat/nc/msf/socat)")
     menu_item(" E", "🔮  Advanced Evasion Builder",       "⛔", "DLL Unhooking + Direct Syscalls + Sleep Obfuscation")
     menu_item(" D", "🌐  DNS C2 Tunneling",               "⛔", "C2 über DNS Port 53 — bypassed jede Firewall")
+    menu_item(" S", "🔐  HTTPS Shell (Port 443)",         "⛔", "Sieht aus wie HTTPS — bypassed Firewalls + IDS")
     print()
     menu_item(" 0", "← Zurück", "")
     print()
@@ -2029,6 +2193,43 @@ async def menu_c2():
             await run_tool_live(start_server(kali_ip, domain, port))
         wait_key()
 
+    elif choice in ("s", "S"):
+        banner()
+        section("🔐  HTTPS REVERSE SHELL", "Port 443 — sieht aus wie HTTPS")
+        info_box([
+            "Reverse Shell über Port 443 — die unsichtbarste Methode:",
+            "  → Fast jede Firewall lässt 443 durch (HTTPS-Traffic)",
+            "  → IDS/IPS kann verschlüsselten Traffic nicht lesen",
+            "  → Kein VPN oder Tunnel nötig",
+            "",
+            "Methoden:",
+            "  1. Metasploit HTTPS Handler  — meterpreter, stabilste Methode",
+            "  2. PowerShell HTTPS Stager   — fileless, kein AV-Alarm",
+            "  3. OpenSSL Shell             — kein Tool-Upload nötig",
+            "  4. DNS over HTTPS C2         — ultra-stealthy, via Cloudflare",
+        ])
+        print()
+        lhost = ask("Deine Kali IP (LHOST)", required=True)
+        if not lhost:
+            wait_key(); return
+        try:
+            lport = int(ask("Port (default 443)", "443"))
+        except ValueError:
+            lport = 443
+        platform = ask("Ziel-OS [windows/linux]", "windows")
+        print()
+        from tools.c2.https_shell import generate_https_payloads, build_https_exe
+        try:
+            await run_tool_live(generate_https_payloads(lhost, lport, platform))
+        except KeyboardInterrupt:
+            pass
+        print()
+        build = ask("msfvenom EXE jetzt generieren? [j/n]", "n")
+        if build.lower() in ("j", "y"):
+            print()
+            await run_tool_live(build_https_exe(lhost, lport, platform))
+        wait_key()
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ASSISTANT / TUTORIALS / HEALTH CHECK
@@ -2155,27 +2356,104 @@ async def menu_tutorials():
 
 async def menu_health():
     """Health Check — prüft installierte Tools."""
-    banner()
-    section("🏥  HEALTH CHECK", "Prüft Python-Module + externe Tools + System")
-    print()
-    try:
-        from tools.health_check import run_health_check
-        async for line in run_health_check():
-            if line.startswith("═") or line.startswith("GESAMT"):
-                print(f"  {G}{line}{R}")
-            elif "✓" in line:
-                print(f"  {G}{line}{R}")
-            elif "✗" in line:
-                print(f"  {RD}{line}{R}")
-            elif "~" in line:
-                print(f"  {Y}{line}{R}")
-            elif line.startswith("[*]"):
-                print(f"  {C}{line}{R}")
-            else:
-                print(f"  {DIM}{line}{R}")
-    except Exception as e:
-        print(f"  {RD}[!] {e}{R}")
-    wait_key()
+    while True:
+        banner()
+        section("🏥  HEALTH CHECK", "Prüft Python-Module + externe Tools + System")
+        menu_item(" 1", "🔍  Health Check starten",    "🟢", "Zeigt was installiert ist und was fehlt")
+        menu_item(" 2", "🔧  Auto-Fix: Tools installieren", "🟡", "Fehlende Tools automatisch per apt/pip installieren")
+        menu_item(" 0", "← Zurück", "")
+        print()
+        choice = prompt("health")
+        if choice == "0":
+            return
+
+        clr()
+        if choice == "1":
+            section("🏥  HEALTH CHECK", "Prüft Python-Module + externe Tools + System")
+            print()
+            missing_apt = []
+            missing_pip = []
+            try:
+                from tools.health_check import run_health_check, EXTERNAL_TOOLS
+                async for line in run_health_check():
+                    if line.startswith("═") or line.startswith("GESAMT"):
+                        print(f"  {G}{line}{R}")
+                    elif "✓" in line:
+                        print(f"  {G}{line}{R}")
+                    elif "✗" in line:
+                        print(f"  {RD}{line}{R}")
+                    elif "~" in line:
+                        print(f"  {Y}{line}{R}")
+                    elif line.startswith("[*]"):
+                        print(f"  {C}{line}{R}")
+                    else:
+                        print(f"  {DIM}{line}{R}")
+            except Exception as e:
+                print(f"  {RD}[!] {e}{R}")
+
+        elif choice == "2":
+            section("🔧  AUTO-FIX", "Fehlende Tools installieren")
+            print()
+            import shutil
+            try:
+                from tools.health_check import EXTERNAL_TOOLS
+            except Exception as e:
+                print(f"  {RD}[!] {e}{R}"); wait_key(); continue
+
+            # Fehlende Tools finden
+            apt_missing = []
+            pip_missing = []
+            for binary, level, desc, install in EXTERNAL_TOOLS:
+                if shutil.which(binary) is None:
+                    if install.startswith("apt"):
+                        apt_missing.append((binary, desc, install))
+                    elif install.startswith("pip"):
+                        pip_missing.append((binary, desc, install))
+
+            if not apt_missing and not pip_missing:
+                print(f"  {G}[✓] Alle Tools bereits installiert!{R}")
+                wait_key(); continue
+
+            print(f"  {Y}Fehlende Tools:\033[0m\n")
+            for binary, desc, install in apt_missing + pip_missing:
+                print(f"  {RD}✗{R}  {binary:<20}  {desc}  → {install}")
+
+            print(f"\n  {Y}Installieren? [j/n]{R}")
+            if prompt("confirm").lower() not in ("j", "y", "ja", "yes"):
+                wait_key(); continue
+
+            print()
+            # apt Tools
+            if apt_missing:
+                apt_pkgs = []
+                for _, _, install in apt_missing:
+                    pkg = install.replace("apt install ", "").strip()
+                    apt_pkgs.append(pkg)
+                pkgs_str = " ".join(dict.fromkeys(apt_pkgs))  # deduplizieren
+                print(f"  {C}[*] apt install {pkgs_str}{R}")
+                import subprocess
+                try:
+                    subprocess.run(["apt", "install", "-y"] + list(dict.fromkeys(apt_pkgs)),
+                                   check=True)
+                    print(f"  {G}[✓] apt-Pakete installiert{R}")
+                except subprocess.CalledProcessError as e:
+                    print(f"  {RD}[!] apt Fehler: {e}{R}")
+
+            # pip Tools
+            for binary, desc, install in pip_missing:
+                pkg = install.replace("pip3 install ", "").strip()
+                print(f"  {C}[*] pip3 install {pkg}{R}")
+                try:
+                    subprocess.run(
+                        ["pip3", "install", "--break-system-packages", pkg],
+                        check=True
+                    )
+                    print(f"  {G}[✓] {pkg} installiert{R}")
+                except Exception as e:
+                    print(f"  {RD}[!] {e}{R}")
+
+            print(f"\n  {G}[✓] Auto-Fix abgeschlossen!{R}")
+        wait_key()
 
 
 async def menu_map():
