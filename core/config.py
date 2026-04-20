@@ -5,10 +5,16 @@ from pathlib import Path
 CONFIG_DIR = Path.home() / ".config" / "penkit-tui"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
+# Zentrales Output-Verzeichnis
+OUTPUT_ROOT = Path.home() / "penkit-output"
+
 DEFAULTS = {
     "interface": "wlan0",
     "monitor_interface": "wlan0mon",
-    "output_dir": str(Path.home() / "penkit-captures"),
+    "output_dir": str(OUTPUT_ROOT),
+    "wifi_dir": str(OUTPUT_ROOT / "wifi"),
+    "payloads_dir": str(OUTPUT_ROOT / "payloads"),
+    "osint_dir": str(OUTPUT_ROOT / "osint"),
     "wordlist": "/usr/share/wordlists/rockyou.txt",
     "last_target": "",
 }
