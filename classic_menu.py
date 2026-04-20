@@ -34,6 +34,7 @@ def slow(text: str, delay: float = 0.018):
 
 def banner():
     clr()
+    from core.anon import status_line
     art = f"""
 {DG}  ██████╗ ███████╗███╗   ██╗██╗  ██╗██╗████████╗
 {G}  ██╔══██╗██╔════╝████╗  ██║██║ ██╔╝██║╚══██╔══╝
@@ -47,6 +48,8 @@ def banner():
 {DIM}  └────────────────────────────────────────────────────────┘{R}
 """
     print(art)
+    print(status_line())
+    print()
 
 
 def print_ascii_art(art: str, color: str = ""):
@@ -3257,6 +3260,53 @@ async def menu_output():
     wait_key()
 
 
+async def menu_anon():
+    """Anonymitäts-Manager — Tor, proxychains, IP-Leak-Check."""
+    while True:
+        banner()
+        section("🧅  ANONYMITÄT", "Tor · proxychains · IP-Leak-Check")
+        from core.anon import anon_status, get_real_ip
+        s = anon_status()
+        tor_badge  = f"{G}AKTIV ✓{R}" if s["tor"] else f"{RD}INAKTIV ✗{R}"
+        pc_badge   = f"{G}✓{R}" if s["proxychains"] else f"{RD}✗{R}"
+        print(f"  Tor-Status:     {tor_badge}")
+        print(f"  proxychains4:   {pc_badge}")
+        print()
+        menu_item("1", "🧅  Tor starten",              "🟢", "Traffic über Tor-Netzwerk anonymisieren")
+        menu_item("2", "🔄  Neue Tor-Identity",         "🟢", "Andere Exit-Node → neue IP")
+        menu_item("3", "⛔  Tor stoppen",               "🟡", "Direktverbindung reaktivieren")
+        menu_item("4", "🔍  IP & Leak Check",           "🟢", "Echte IP vs Tor-IP anzeigen")
+        menu_item("5", "⚙️   proxychains konfigurieren", "🟢", "Sicherstellen dass proxychains → Tor zeigt")
+        menu_item("0", "Back")
+        print()
+        print(f"  {DIM}Für vollen Schutz PenKit so starten:{R}")
+        print(f"  {C}  proxychains4 python3 classic_menu.py{R}")
+        print()
+
+        choice = prompt("anon")
+        if choice == "0":
+            return
+        clr()
+
+        if choice == "1":
+            from core.anon import start_tor
+            await run_tool_live(start_tor())
+        elif choice == "2":
+            from core.anon import restart_tor
+            await run_tool_live(restart_tor())
+        elif choice == "3":
+            from core.anon import stop_tor
+            await run_tool_live(stop_tor())
+        elif choice == "4":
+            from core.anon import ip_leak_check
+            await run_tool_live(ip_leak_check())
+        elif choice == "5":
+            from core.anon import setup_proxychains
+            await run_tool_live(setup_proxychains())
+
+        wait_key()
+
+
 def boot_sequence():
     clr()
     lines = [
@@ -3304,6 +3354,7 @@ async def main_menu():
         print(f"  {DIM}├{'─'*66}┤{R}")
         menu_item(" ?", "🤖  KI-Assistent",          "🟢", "Frage stellen → Tool-Empfehlung")
         menu_item(" A", "🧠  AI Attack Terminal",    "🔴", "KI startet Angriffe + passt sich an (Ollama kostenlos)")
+        menu_item(" N", "🧅  Anonymität / Tor",      "🟢", "Tor starten, IP-Leak-Check, proxychains")
         menu_item(" T", "📚  Tutorials",              "🟢", "Schritt-für-Schritt Anleitungen für alle Module")
         menu_item(" H", "🏥  Health Check",           "🟢", "Prüft welche Tools installiert sind")
         menu_item(" M", "🗺️   Target Map",             "🟡", "Interaktive Karte mit allen bekannten Ziel-Infos")
@@ -3335,6 +3386,7 @@ async def main_menu():
             "r": menu_report, "R": menu_report,
             "o": menu_output,"O": menu_output,
             "a": menu_ai_terminal, "A": menu_ai_terminal,
+            "n": menu_anon,  "N": menu_anon,
         }
 
         if choice == "0":
