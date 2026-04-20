@@ -41,10 +41,18 @@ def banner():
 {G}  ██╔═══╝ ██╔══╝  ██║╚████║██╔═██╗ ██║   ██║
 {DG}  ██║     ███████╗██║ ╚███║██║  ██╗██║   ██║
 {DG}  ╚═╝     ╚══════╝╚═╝  ╚══╝╚═╝  ╚═╝╚═╝   ╚═╝{R}
-{DIM}             Authorized Pentesting Framework v3             {R}
-{DIM}  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{R}
+{DIM}  ┌────────────────────────────────────────────────────────┐{R}
+{DIM}  │  {R}{C}Authorized Pentesting Toolkit  v3.0{R}{DIM}                    │{R}
+{DIM}  │  {R}{DG}? = Assistent  |  T = Tutorials  |  H = Health Check{R}{DIM}   │{R}
+{DIM}  └────────────────────────────────────────────────────────┘{R}
 """
     print(art)
+
+
+def print_ascii_art(art: str, color: str = ""):
+    c = color or "\033[32m"
+    for line in art.strip().split("\n"):
+        print(f"  {c}{line}\033[0m")
 
 def section(title: str, subtitle: str = ""):
     w = 70
@@ -1370,6 +1378,154 @@ async def menu_c2():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# ASSISTANT / TUTORIALS / HEALTH CHECK
+# ═════════════════════════════════════════════════════════════════════════════
+
+async def menu_assistant():
+    """KI-Assistent — natürlichsprachliche Tool-Empfehlungen."""
+    while True:
+        banner()
+        section("🤖  PENKIT KI-ASSISTENT", "Frage stellen → passendes Tool + Anleitung")
+        info_box([
+            "Beispiel-Fragen:",
+            '  "Ich will eine Webseite runternehmen"',
+            '  "Wie finde ich den Standort einer Person?"',
+            '  "Ich will WLAN-Passwort knacken"',
+            '  "Jemand soll auf einen Link klicken und ich bekomme Zugriff"',
+            '  "Wie belausche ich Netzwerkverkehr?"',
+            '  "Ich will Windows-PC fernsteuern"',
+        ])
+        print()
+        question = prompt("Deine Frage  (0 = zurück)")
+        if question in ("0", ""):
+            return
+
+        print()
+        try:
+            from tools.assistant import ask as ai_ask
+            results = ai_ask(question)
+            if not results:
+                print(f"  {Y}[?] Keine Übereinstimmung gefunden.{R}")
+                print(f"  {DIM}Tipp: Andere Schlüsselwörter probieren (z.B. 'WLAN', 'Passwort', 'Server'){R}")
+                wait_key()
+                continue
+
+            for i, rec in enumerate(results, 1):
+                w = 66
+                print(f"\n  {G}╔{'═'*(w-2)}╗{R}")
+                print(f"  {G}║{B}{f'  {i}. {rec.tool_name}'.center(w-2)}{R}{G}║{R}")
+                print(f"  {G}╚{'═'*(w-2)}╝{R}")
+                print(f"  {C}Menü-Pfad   :{R} {W}{rec.menu_path}{R}")
+                print(f"  {C}Gefährlichkeit:{R} {rec.danger_level}")
+                print(f"  {C}Was es macht:{R} {DIM}{rec.short_desc}{R}")
+                print()
+                print(f"  {G}{B}Schritte:{R}")
+                for step in rec.steps:
+                    if step == "":
+                        print()
+                    elif step.startswith("  "):
+                        print(f"  {DIM}{step}{R}")
+                    else:
+                        print(f"    {G}→{R} {step}")
+                if rec.tips:
+                    print(f"\n  {Y}{B}Tipps:{R}")
+                    for tip in rec.tips:
+                        print(f"    {Y}·{R} {tip}")
+                if i < len(results):
+                    print(f"\n  {DIM}{'─'*60}{R}")
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+
+        wait_key()
+
+
+async def menu_tutorials():
+    """Interaktive Tutorials für alle Module."""
+    while True:
+        banner()
+        section("📚  TUTORIALS", "Schritt-für-Schritt Anleitungen")
+        try:
+            from tools.tutorials import list_tutorials, get_tutorial
+            tut_list = list_tutorials()
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+            wait_key()
+            return
+
+        for i, (key, title) in enumerate(tut_list, 1):
+            print(f"  {DIM}[{R}{G}{B}{i:>2}{R}{DIM}]{R}  {G}{title}{R}")
+        print()
+        menu_item(" 0", "← Zurück", "")
+        print()
+
+        choice = prompt("tutorial")
+        if choice == "0":
+            return
+        try:
+            idx = int(choice) - 1
+            key = tut_list[idx][0]
+        except (ValueError, IndexError):
+            continue
+
+        tut = get_tutorial(key)
+        if not tut:
+            continue
+
+        banner()
+        # ASCII Art für das Tutorial
+        if "ascii" in tut:
+            print_ascii_art(tut["ascii"], G)
+            print()
+
+        section(tut["title"])
+
+        for sec in tut["sections"]:
+            w = 66
+            print(f"\n  {C}{'─'*2} {B}{sec['title']}{R}{C} {'─'*(w - len(sec['title']) - 4)}{R}")
+            print()
+            for line in sec["content"]:
+                if line == "":
+                    print()
+                elif line.startswith("  "):
+                    print(f"  {DIM}{line}{R}")
+                elif line.startswith("✓") or line.startswith("✗"):
+                    color = G if line.startswith("✓") else RD
+                    print(f"    {color}{line}{R}")
+                elif any(line.startswith(p) for p in ["Schritt", "Phase", "Methode", "Weg"]):
+                    print(f"  {Y}{B}{line}{R}")
+                else:
+                    print(f"    {line}")
+            print()
+
+        wait_key()
+
+
+async def menu_health():
+    """Health Check — prüft installierte Tools."""
+    banner()
+    section("🏥  HEALTH CHECK", "Prüft Python-Module + externe Tools + System")
+    print()
+    try:
+        from tools.health_check import run_health_check
+        async for line in run_health_check():
+            if line.startswith("═") or line.startswith("GESAMT"):
+                print(f"  {G}{line}{R}")
+            elif "✓" in line:
+                print(f"  {G}{line}{R}")
+            elif "✗" in line:
+                print(f"  {RD}{line}{R}")
+            elif "~" in line:
+                print(f"  {Y}{line}{R}")
+            elif line.startswith("[*]"):
+                print(f"  {C}{line}{R}")
+            else:
+                print(f"  {DIM}{line}{R}")
+    except Exception as e:
+        print(f"  {RD}[!] {e}{R}")
+    wait_key()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # BOOT SEQUENCE
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -1413,6 +1569,12 @@ async def main_menu():
         print(f"  {DIM}├{'─'*66}┤{R}")
         menu_item(" 8", "🔵  Blue Team Defense",     "🟢", "ARP watch, auth.log, honeypot, port monitor")
         menu_item(" J", "🃏  Joker / Pranks",        "🟡", "Fake BSOD, Kahoot bot, browser chaos, pranks")
+        print(f"  {DIM}├{'─'*66}┤{R}")
+        print(f"  {DIM}│{'  🛠️   HILFE & SYSTEM':^66}│{R}")
+        print(f"  {DIM}├{'─'*66}┤{R}")
+        menu_item(" ?", "🤖  KI-Assistent",          "🟢", "Frage stellen → Tool-Empfehlung")
+        menu_item(" T", "📚  Tutorials",              "🟢", "Schritt-für-Schritt Anleitungen für alle Module")
+        menu_item(" H", "🏥  Health Check",           "🟢", "Prüft welche Tools installiert sind")
         print(f"  {DIM}└{'─'*66}┘{R}")
         print()
         menu_item(" 0", "❌  Exit", "")
@@ -1429,8 +1591,10 @@ async def main_menu():
             "7": menu_phishing,
             "8": menu_blueteam,
             "9": menu_c2,
-            "j": menu_joker,
-            "J": menu_joker,
+            "j": menu_joker, "J": menu_joker,
+            "?": menu_assistant,
+            "t": menu_tutorials, "T": menu_tutorials,
+            "h": menu_health, "H": menu_health,
         }
 
         if choice == "0":
