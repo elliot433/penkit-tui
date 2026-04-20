@@ -1525,6 +1525,138 @@ async def menu_health():
     wait_key()
 
 
+async def menu_map():
+    """Target Map — interaktive Karte mit allen bekannten Ziel-Infos."""
+    from tools.map_tracker import MapTracker, load_targets, _DB_PATH
+    tracker = MapTracker()
+
+    while True:
+        banner()
+        section("🗺️   TARGET MAP", "Interaktive Karte  ·  Farb-kodierte Marker  ·  Credential-Popups")
+
+        targets = load_targets()
+        valid   = [t for t in targets if t.lat != 0 or t.lon != 0]
+        print(f"  {DIM}Datenbank: {G}{B}{len(targets)}{R}{DIM} Ziel(e)  |  "
+              f"{G}{B}{len(valid)}{R}{DIM} mit Koordinaten  |  Pfad: {_DB_PATH}{R}\n")
+
+        menu_item("1", "IP hinzufügen + geolocaten",    "🟡", "ipinfo.io → Standort automatisch")
+        menu_item("2", "Alle Quellen importieren",      "🟡", "Phishing-Log + OSINT-Reports automatisch")
+        menu_item("3", "Karte generieren + öffnen",     "🟡", "HTML-Karte in Browser öffnen")
+        menu_item("4", "Ziele anzeigen",                "🟢", "Alle gespeicherten Ziele auflisten")
+        menu_item("5", "Manuell eintragen",             "🟢", "Label, IP, OS, Credentials, Notizen")
+        menu_item("6", "Alle Ziele löschen",            "🟠", "Datenbank leeren")
+        menu_item("0", "Back")
+
+        choice = prompt("map")
+        if choice == "0":
+            return
+
+        clr()
+
+        # ── 1: IP hinzufügen ─────────────────────────────────────────────────
+        if choice == "1":
+            section("IP HINZUFÜGEN", "Geolocation via ipinfo.io (kein API-Key nötig)")
+            info_box([
+                "IP-Adresse: z.B. 8.8.8.8 oder 203.0.113.45",
+                "Label:      Anzeigename auf der Karte (z.B. 'Opfer1' oder 'Router')",
+                "Quelle:     c2 | phishing | osint | wifi | iot | manual",
+            ])
+            ip     = ask("IP-Adresse", required=True)
+            label  = ask("Label", ip)
+            source = ask("Quelle", "manual")
+            print()
+            await run_tool_live(tracker.add_ip(ip, label, source))
+
+        # ── 2: Auto-Import ────────────────────────────────────────────────────
+        elif choice == "2":
+            section("AUTO-IMPORT", "Phishing-Logs + OSINT-Reports → Karte")
+            print(f"  {DIM}Liest: /tmp/penkit_phish_creds.json + /tmp/osint_report_*.md{R}\n")
+            await run_tool_live(tracker.import_all_sources())
+
+        # ── 3: Karte generieren ───────────────────────────────────────────────
+        elif choice == "3":
+            section("KARTE GENERIEREN", "HTML-Karte mit Leaflet.js + CartoDB Dark-Tiles")
+            out = ask("Ausgabepfad", "/tmp/penkit_map.html")
+            print()
+            await run_tool_live(tracker.generate(out))
+
+        # ── 4: Ziele anzeigen ─────────────────────────────────────────────────
+        elif choice == "4":
+            section("ALLE ZIELE", "Gespeicherte Ziele in Datenbank")
+            t_list = tracker.list_targets()
+            if not t_list:
+                print(f"  {Y}[!] Keine Ziele gespeichert.{R}")
+            else:
+                src_colors = {
+                    "c2": RD, "phishing": Y, "osint": C,
+                    "wifi": "\033[95m", "iot": G, "manual": DIM,
+                }
+                for i, t in enumerate(t_list, 1):
+                    sc = src_colors.get(t.source, DIM)
+                    loc = f"{t.city}, {t.country}" if t.city else ("?" if not t.lat else f"{t.lat:.2f},{t.lon:.2f}")
+                    cred = f"  {RD}[CREDS]{R}" if t.username or t.password else ""
+                    print(f"  {DIM}[{R}{G}{i:>2}{R}{DIM}]{R}  "
+                          f"{sc}{t.source.upper():<10}{R}  "
+                          f"{W}{t.label:<25}{R}  "
+                          f"{DIM}{t.ip:<17}{loc}{R}{cred}")
+
+        # ── 5: Manuell eintragen ──────────────────────────────────────────────
+        elif choice == "5":
+            section("MANUELL EINTRAGEN", "Ziel ohne IP-Geolocation direkt anlegen")
+            from tools.map_tracker import TargetInfo, add_target
+            info_box([
+                "GPS-Koordinaten: z.B. 48.1351, 11.5820 (München)",
+                "Credentials und Ports sind optional — leer lassen = nicht anzeigen",
+            ])
+            label    = ask("Label / Name", required=True)
+            ip       = ask("IP-Adresse", "")
+            lat_s    = ask("Latitude  (z.B. 48.1351)", "0")
+            lon_s    = ask("Longitude (z.B. 11.5820)", "0")
+            source   = ask("Quelle (c2/phishing/osint/wifi/iot/manual)", "manual")
+            city     = ask("Stadt", "")
+            country  = ask("Land (z.B. DE)", "")
+            hostname = ask("Hostname", "")
+            os_      = ask("Betriebssystem", "")
+            username = ask("Benutzername", "")
+            password = ask("Passwort", "")
+            ports_s  = ask("Offene Ports (kommagetrennt, z.B. 22,80,443)", "")
+            notes    = ask("Notizen", "")
+
+            try:
+                lat = float(lat_s)
+                lon = float(lon_s)
+            except ValueError:
+                lat = lon = 0.0
+
+            ports = []
+            if ports_s:
+                try:
+                    ports = [int(p.strip()) for p in ports_s.split(",") if p.strip()]
+                except ValueError:
+                    pass
+
+            t = TargetInfo(
+                label=label, source=source, ip=ip,
+                lat=lat, lon=lon, city=city, country=country,
+                hostname=hostname, os=os_, username=username, password=password,
+                open_ports=ports, notes=notes,
+            )
+            add_target(t)
+            print(f"\n  {G}[+] Ziel '{label}' gespeichert.{R}")
+
+        # ── 6: Datenbank leeren ───────────────────────────────────────────────
+        elif choice == "6":
+            section("ALLE ZIELE LÖSCHEN", "Löscht komplette Target-Datenbank")
+            confirm = ask(f"Alle {len(targets)} Ziele löschen? Tippe 'LÖSCHEN' zur Bestätigung", "")
+            if confirm == "LÖSCHEN":
+                tracker.clear_targets()
+                print(f"\n  {G}[+] Datenbank geleert.{R}")
+            else:
+                print(f"\n  {Y}[!] Abgebrochen.{R}")
+
+        wait_key()
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # BOOT SEQUENCE
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1575,6 +1707,7 @@ async def main_menu():
         menu_item(" ?", "🤖  KI-Assistent",          "🟢", "Frage stellen → Tool-Empfehlung")
         menu_item(" T", "📚  Tutorials",              "🟢", "Schritt-für-Schritt Anleitungen für alle Module")
         menu_item(" H", "🏥  Health Check",           "🟢", "Prüft welche Tools installiert sind")
+        menu_item(" M", "🗺️   Target Map",             "🟡", "Interaktive Karte mit allen bekannten Ziel-Infos")
         print(f"  {DIM}└{'─'*66}┘{R}")
         print()
         menu_item(" 0", "❌  Exit", "")
@@ -1595,6 +1728,7 @@ async def main_menu():
             "?": menu_assistant,
             "t": menu_tutorials, "T": menu_tutorials,
             "h": menu_health, "H": menu_health,
+            "m": menu_map,   "M": menu_map,
         }
 
         if choice == "0":
