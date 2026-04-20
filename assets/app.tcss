@@ -1,0 +1,84 @@
+/* Global */
+Screen {
+    background: #05050f;
+    color: #e0e0ff;
+}
+
+Header {
+    background: #0a0a1f;
+    color: #6c63ff;
+    text-style: bold;
+}
+
+Footer {
+    background: #0a0a1f;
+    color: #555577;
+}
+
+/* Tabs */
+TabbedContent {
+    height: 1fr;
+}
+
+TabPane {
+    padding: 0;
+    height: 1fr;
+}
+
+Tabs {
+    background: #0a0a1f;
+    border-bottom: solid #1a1a3e;
+}
+
+Tab {
+    color: #555577;
+}
+
+Tab.-active {
+    color: #6c63ff;
+    text-style: bold;
+}
+
+Tab:hover {
+    color: #9b94ff;
+}
+
+/* Inputs */
+Input {
+    background: #0d0d1a;
+    border: solid #2a2a4e;
+    color: #e0e0ff;
+    margin-bottom: 1;
+}
+
+Input:focus {
+    border: solid #6c63ff;
+}
+
+/* Buttons */
+Button {
+    border: solid #2a2a4e;
+}
+
+Button:hover {
+    border: solid #6c63ff;
+}
+
+/* Labels */
+Label {
+    color: #7777aa;
+    margin-top: 1;
+}
+
+/* Scrollbars */
+ScrollableContainer {
+    scrollbar-background: #0a0a1f;
+    scrollbar-color: #2a2a4e;
+    scrollbar-color-active: #6c63ff;
+}
+
+/* Notifications */
+Toast {
+    background: #0f0f2a;
+    border: solid #6c63ff;
+}
