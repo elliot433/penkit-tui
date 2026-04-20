@@ -319,6 +319,8 @@ async def menu_network():
         menu_item(" 4", "💾  Export letzten Scan",     "🟢", "JSON-Export der Scan-Ergebnisse")
         menu_item(" 5", "📡  IoT Scanner",             "🔴", "Router/Kameras/NAS finden + Default-Creds testen")
         menu_item(" 6", "💥  DDoS / Stress-Test",      "⛔", "Slowloris, HTTP Flood, hping3 SYN-Flood")
+        menu_item(" 7", "🎯  Auto-Exploit Suggester",  "🔴", "nmap CVE → fertige Metasploit-Befehle")
+        menu_item(" 8", "⚡  Quick Vuln Check",        "🔴", "EternalBlue/BlueKeep/Heartbleed in 60 Sek")
         menu_item(" 0", "← Zurück", "")
 
         choice = prompt("network")
@@ -440,6 +442,62 @@ async def menu_network():
                     hpf = HpingFlood(host, port, mode, duration, spoof_src=spoof)
                     await run_tool_live(hpf.run())
 
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+            except Exception as e:
+                print(f"  {RD}[!] {e}{R}")
+
+        elif choice == "7":
+            banner()
+            section("🎯  AUTO-EXPLOIT SUGGESTER", "nmap CVE → Metasploit-Befehle")
+            info_box([
+                "Läuft nmap mit vulners + exploit Scripts:",
+                "  → Findet CVEs mit CVSS Score",
+                "  → Sucht passende Metasploit-Module (searchsploit)",
+                "  → Generiert fertige msfconsole-Befehle",
+                "  → Sortiert nach Kritikalität (Critical → High → Medium)",
+                "",
+                "Benötigt: nmap, searchsploit (exploitdb-package)",
+                "Install:  apt install exploitdb",
+                "          nmap --script-updatedb",
+            ])
+            print()
+            target = ask("Ziel IP / Hostname", required=True)
+            if not target:
+                wait_key(); continue
+            lhost = ask("Deine IP (LHOST für Reverse Shell)", "10.10.10.1")
+            ports = ask("Port-Range", "1-10000")
+            print(f"\n  {RD}🔴  Nur gegen autorisierte Ziele!{R}\n")
+            try:
+                from tools.network.auto_exploit import run_auto_exploit
+                await run_tool_live(run_auto_exploit(target, lhost, ports))
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[!] Gestoppt.{R}")
+            except Exception as e:
+                print(f"  {RD}[!] {e}{R}")
+
+        elif choice == "8":
+            banner()
+            section("⚡  QUICK VULN CHECK", "Kritische Exploits in 60 Sek")
+            info_box([
+                "Schnellcheck der gefährlichsten bekannten Schwachstellen:",
+                "  → EternalBlue (MS17-010) — WannaCry / NotPetya",
+                "  → BlueKeep (CVE-2019-0708) — RDP Pre-Auth RCE",
+                "  → Heartbleed — SSL Speicher-Leak",
+                "  → Shellshock — Apache CGI RCE",
+                "  → SMBGhost (CVE-2020-0796) — SMB3 RCE",
+                "",
+                "Ausgabe: VERWUNDBAR / kein Ergebnis + fertiger MSF-Befehl",
+            ])
+            print()
+            target = ask("Ziel IP / Hostname", required=True)
+            if not target:
+                wait_key(); continue
+            lhost = ask("Deine IP (LHOST)", "10.10.10.1")
+            print()
+            try:
+                from tools.network.auto_exploit import quick_exploit_check
+                await run_tool_live(quick_exploit_check(target, lhost))
             except KeyboardInterrupt:
                 print(f"\n  {Y}[!] Gestoppt.{R}")
             except Exception as e:
