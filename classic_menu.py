@@ -2058,6 +2058,214 @@ async def menu_map():
 # BOOT SEQUENCE
 # ═════════════════════════════════════════════════════════════════════════════
 
+async def menu_ai_terminal():
+    """KI-Angriffsterminal — autonomes AI-gestütztes Pentesting."""
+    from tools.ai_terminal import (
+        AIAttackTerminal, OllamaBackend, ClaudeBackend, OpenAIBackend,
+        get_backend, save_keys, load_keys, parse_action, execute_action,
+        SYSTEM_PROMPT,
+    )
+    from core.config import load as load_cfg
+    cfg = load_cfg()
+
+    banner()
+    section("🤖  AI ATTACK TERMINAL", "Autonomes KI-Pentest — beschreibe Ziel → KI startet Angriffe")
+
+    # Backend wählen
+    print(f"\n  {C}KI-Backend:{R}")
+    print(f"  {DIM}[1]{R}  {G}Ollama (lokal, kostenlos){R}  {DIM}— kein API-Key nötig{R}")
+    print(f"  {DIM}[2]{R}  Claude API {DIM}— bestes Ergebnis, kostenpflichtig{R}")
+    print(f"  {DIM}[3]{R}  OpenAI GPT-4 {DIM}— kostenpflichtig{R}")
+    print(f"  {DIM}[4]{R}  API-Keys konfigurieren{R}")
+    print()
+
+    choice = ask("Backend", "1")
+
+    if choice == "4":
+        keys = load_keys()
+        print(f"\n  {C}API-Keys eingeben (leer = unverändert):{R}")
+        claude_key = ask("Claude API-Key", keys.get("claude", ""))
+        openai_key = ask("OpenAI API-Key", keys.get("openai", ""))
+        if claude_key:
+            keys["claude"] = claude_key
+        if openai_key:
+            keys["openai"] = openai_key
+        save_keys(keys)
+        print(f"  {G}[+] Keys gespeichert{R}")
+        wait_key()
+        return
+
+    # Backend initialisieren
+    clr()
+    print(f"\n  {G}[*] Initialisiere KI-Backend...{R}")
+
+    if choice == "2":
+        keys = load_keys()
+        if not keys.get("claude"):
+            print(f"  {Y}[!] Claude API-Key nicht gesetzt. Erst Option 4 nutzen.{R}")
+            wait_key()
+            return
+        backend = ClaudeBackend(keys["claude"])
+        backend_name = "Claude"
+    elif choice == "3":
+        keys = load_keys()
+        if not keys.get("openai"):
+            print(f"  {Y}[!] OpenAI API-Key nicht gesetzt. Erst Option 4 nutzen.{R}")
+            wait_key()
+            return
+        backend = OpenAIBackend(keys["openai"])
+        backend_name = "GPT-4o-mini"
+    else:
+        # Ollama
+        backend = OllamaBackend()
+        if not await backend.is_available():
+            print(f"  {RD}[!] Ollama nicht installiert!{R}")
+            print(f"\n  {C}Installation:{R}")
+            print(f"  {W}  curl -fsSL https://ollama.com/install.sh | sh{R}")
+            print(f"  {W}  ollama pull llama3.2{R}")
+            print(f"  {DIM}Danach PenKit neu starten und nochmal versuchen.{R}")
+            wait_key()
+            return
+
+        models = await backend.get_models()
+        if not models:
+            print(f"  {Y}[!] Kein Modell installiert.{R}")
+            print(f"\n  {C}Modell laden:{R}")
+            print(f"  {W}  ollama pull llama3.2    # empfohlen (4 GB){R}")
+            print(f"  {W}  ollama pull mistral     # Alternative (4 GB){R}")
+            wait_key()
+            return
+
+        print(f"  {G}[+] Ollama verfügbar. Modelle:{R}")
+        for i, m in enumerate(models, 1):
+            print(f"  {DIM}[{i}]{R}  {m}")
+        model_choice = ask(f"Modell wählen (1-{len(models)})", "1")
+        try:
+            idx = int(model_choice) - 1
+            backend.model = models[idx]
+        except (ValueError, IndexError):
+            backend.model = models[0]
+        backend_name = f"Ollama:{backend.model}"
+
+    terminal = AIAttackTerminal(backend, cfg)
+    print(f"  {G}[+] KI-Backend: {backend_name}{R}")
+
+    # Ziel-Info sammeln
+    print(f"\n  {DIM}═{'═'*66}{R}")
+    print(f"  {G}{B}Was weisst du über das Ziel?{R}")
+    print(f"  {DIM}Beispiele: IP, offene Ports, OS, verwendete Software, WLAN-SSID,...{R}")
+    print(f"  {DIM}Mehr Info = bessere Angriffe. Du kannst auch mitten im Gespräch mehr hinzufügen.{R}")
+    print(f"  {DIM}═{'═'*66}{R}\n")
+
+    target_info = ask("Ziel beschreiben", required=True)
+    terminal.target_info = target_info
+
+    # Erste Analyse
+    initial_prompt = f"""Ich teste folgendes System (autorisierter Pentest):
+
+{target_info}
+
+Analysiere die Situation und schlage den ersten konkreten Angriff vor.
+Erkläre kurz warum du diesen Angriff wählst."""
+
+    print(f"\n  {DIM}──────────────────────────────────────────────────────────────────{R}")
+    print(f"  {C}{B}KI-Analyse:{R}\n")
+
+    ai_response = []
+    async for token in terminal.analyze(initial_prompt):
+        print(token, end="", flush=True)
+        ai_response.append(token)
+    full_response = "".join(ai_response)
+    print(f"\n")
+
+    # Haupt-Loop
+    while True:
+        print(f"  {DIM}──────────────────────────────────────────────────────────────────{R}")
+
+        # Aktionen aus KI-Antwort extrahieren
+        actions = parse_action(full_response)
+
+        if actions:
+            print(f"\n  {Y}[*] KI möchte folgende Aktion ausführen:{R}")
+            for i, a in enumerate(actions, 1):
+                print(f"  {DIM}[{i}]{R}  {G}{a['tool']}{R}  {W}{a['params'][:60]}{R}")
+            print()
+
+            print(f"  {DIM}[a]{R}  Alles ausführen")
+            print(f"  {DIM}[1-{len(actions)}]{R}  Einzelne Aktion ausführen")
+            print(f"  {DIM}[s]{R}  Überspringen — nur antworten")
+            print(f"  {DIM}[q]{R}  Beenden")
+            exec_choice = ask("Aktion", "a")
+
+            if exec_choice.lower() == "q":
+                break
+            elif exec_choice.lower() != "s":
+                to_run = []
+                if exec_choice.lower() == "a":
+                    to_run = actions
+                elif exec_choice.isdigit():
+                    idx = int(exec_choice) - 1
+                    if 0 <= idx < len(actions):
+                        to_run = [actions[idx]]
+
+                # Aktionen ausführen + Output sammeln
+                tool_output = []
+                for action in to_run:
+                    print(f"\n  {G}[>] Führe aus: {action['tool']} {action['params'][:50]}{R}\n")
+                    print(f"  {DIM}{'─'*60}{R}")
+                    output_lines = []
+                    try:
+                        async for line in execute_action(action["tool"], action["params"], cfg):
+                            if line.strip():
+                                print(f"  {DIM}{line}{R}")
+                                output_lines.append(line)
+                            await asyncio.sleep(0)
+                    except KeyboardInterrupt:
+                        print(f"\n  {Y}[!] Unterbrochen{R}")
+                    tool_output.append(f"[{action['tool']}] Output:\n" + "\n".join(output_lines[:50]))
+
+                # Output zurück an KI
+                if tool_output:
+                    print(f"\n  {DIM}──────────────────────────────────────────────────────────────────{R}")
+                    print(f"  {C}{B}KI analysiert Ergebnis:{R}\n")
+                    feedback = "\n\n".join(tool_output)
+                    next_prompt = f"Tool Output:\n{feedback}\n\nAnalysiere das Ergebnis und schlage den nächsten Schritt vor."
+                    ai_response = []
+                    async for token in terminal.analyze(next_prompt):
+                        print(token, end="", flush=True)
+                        ai_response.append(token)
+                    full_response = "".join(ai_response)
+                    print(f"\n")
+                    continue
+
+        # Freie Eingabe
+        print(f"  {C}Deine Nachricht (leer = nächsten Schritt vorschlagen, 'q' = beenden):{R}")
+        try:
+            user_msg = input(f"  {G}[du]{W} ").strip()
+        except (KeyboardInterrupt, EOFError):
+            break
+
+        if user_msg.lower() in ("q", "quit", "exit", "beenden"):
+            break
+
+        if not user_msg:
+            user_msg = "Schlage den nächsten Angriff vor basierend auf dem bisherigen Fortschritt."
+
+        print(f"\n  {DIM}──────────────────────────────────────────────────────────────────{R}")
+        print(f"  {C}{B}KI:{R}\n")
+        ai_response = []
+        async for token in terminal.analyze(user_msg):
+            print(token, end="", flush=True)
+            ai_response.append(token)
+        full_response = "".join(ai_response)
+        print(f"\n")
+
+    # Session speichern
+    log_path = terminal.save_session()
+    print(f"\n  {G}[+] Session gespeichert: {log_path}{R}")
+    wait_key()
+
+
 async def menu_output():
     """Output-Verzeichnis — zeigt alle gespeicherten Dateien."""
     from core.output_dir import summary, ROOT, DIRS, list_files
@@ -2138,6 +2346,7 @@ async def main_menu():
         print(f"  {DIM}│{'  🛠️   HILFE & SYSTEM':^66}│{R}")
         print(f"  {DIM}├{'─'*66}┤{R}")
         menu_item(" ?", "🤖  KI-Assistent",          "🟢", "Frage stellen → Tool-Empfehlung")
+        menu_item(" A", "🧠  AI Attack Terminal",    "🔴", "KI startet Angriffe + passt sich an (Ollama kostenlos)")
         menu_item(" T", "📚  Tutorials",              "🟢", "Schritt-für-Schritt Anleitungen für alle Module")
         menu_item(" H", "🏥  Health Check",           "🟢", "Prüft welche Tools installiert sind")
         menu_item(" M", "🗺️   Target Map",             "🟡", "Interaktive Karte mit allen bekannten Ziel-Infos")
@@ -2164,6 +2373,7 @@ async def main_menu():
             "h": menu_health, "H": menu_health,
             "m": menu_map,   "M": menu_map,
             "o": menu_output,"O": menu_output,
+            "a": menu_ai_terminal, "A": menu_ai_terminal,
         }
 
         if choice == "0":
