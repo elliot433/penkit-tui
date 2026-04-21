@@ -3,19 +3,21 @@ PenKit Health Check — testet was installiert ist und was funktioniert.
 
 Prüft:
   1. Python-Module (alle PenKit-Imports)
-  2. Externe Tools (nmap, aircrack-ng, hashcat, ...)
-  3. Kali-spezifische Tools
-  4. System (root, Interface-Namen, Netz)
+  2. Externe Tools nach Kategorie
+  3. System (root, interfaces, wordlists, disk)
+  4. Sonderchecks (Ollama, Go, dalfox PATH, Evilginx)
+  5. Reliability Guide
 
-Gibt einen übersichtlichen Bericht aus:
+Status:
   ✓ grün = verfügbar
   ~ gelb = optional, nicht kritisch
-  ✗ rot  = fehlt, wichtige Funktion beeinträchtigt
+  ✗ rot  = fehlt, wichtige Funktion eingeschränkt
 """
 
 from __future__ import annotations
 import asyncio
 import importlib
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -29,82 +31,141 @@ class CheckResult:
     detail: str = ""
 
 
-# ── Python Module ─────────────────────────────────────────────────────────────
+# ── Python Module ──────────────────────────────────────────────────────────────
 PYTHON_MODULES = [
-    ("core.danger",              "ok",   "Danger-System"),
-    ("core.runner",              "ok",   "Async subprocess runner"),
-    ("core.config",              "ok",   "Config laden/speichern"),
-    ("tools.wifi",               "ok",   "WiFi-Module"),
-    ("tools.passwords",          "ok",   "Password-Module"),
-    ("tools.network.scanner",    "ok",   "Network Scanner"),
-    ("tools.network.ddos",       "ok",   "DDoS Module"),
-    ("tools.network.iot_scanner","ok",   "IoT Scanner"),
-    ("tools.web.beef_engine",    "ok",   "BeEF Integration"),
-    ("tools.mitm.bettercap_engine", "ok","MITM bettercap"),
-    ("tools.mitm.responder_engine", "ok","MITM Responder"),
-    ("tools.osint.recon",        "ok",   "OSINT Recon"),
-    ("tools.phishing.pages",     "ok",   "Phishing Pages"),
-    ("tools.phishing.server",    "ok",   "Phishing Server"),
-    ("tools.phishing.smtp_sender","ok",  "SMTP Sender"),
-    ("tools.c2.amsi_bypass",     "ok",   "AMSI/ETW Bypass"),
-    ("tools.c2.shellcode_engine","ok",   "Shellcode Engine"),
-    ("tools.c2.process_hollow",  "ok",   "Process Hollowing"),
-    ("tools.c2.payload_builder", "ok",   "Payload Builder"),
-    ("tools.c2.telegram_agent",  "ok",   "Telegram C2 Agent"),
-    ("tools.joker.kahoot",       "ok",   "Kahoot Tools"),
-    ("tools.assistant",          "ok",   "KI-Assistent"),
-    ("tools.tutorials",          "ok",   "Tutorials"),
+    # Core
+    ("core.danger",                   "ok",   "Danger-System"),
+    ("core.runner",                   "ok",   "Async subprocess runner"),
+    ("core.config",                   "ok",   "Config laden/speichern"),
+    ("core.report_gen",               "ok",   "HTML Report Generator"),
+    ("core.anon",                     "ok",   "Tor / Anonymität"),
+    ("core.opsec",                    "ok",   "OPSEC Suite"),
+    # WiFi
+    ("tools.wifi",                    "ok",   "WiFi-Module"),
+    # Passwörter
+    ("tools.passwords",               "ok",   "Password-Module"),
+    # Netzwerk
+    ("tools.network.scanner",         "ok",   "Network Scanner"),
+    ("tools.network.topology",        "ok",   "Topology Mapper"),
+    ("tools.network.ad_suite",        "ok",   "Active Directory Suite"),
+    ("tools.network.auto_exploit",    "ok",   "Auto-Exploit Suggester"),
+    ("tools.network.lateral_movement","ok",   "Lateral Movement Wizard"),
+    ("tools.network.msf_integration", "ok",   "Metasploit Integration"),
+    # Web
+    ("tools.web.beef_engine",         "ok",   "BeEF Integration"),
+    ("tools.web.xss_engine",          "ok",   "XSS Engine (dalfox)"),
+    ("tools.web.subdomain_takeover",  "ok",   "Subdomain Takeover Scanner"),
+    # MITM
+    ("tools.mitm.bettercap_engine",   "ok",   "MITM bettercap"),
+    ("tools.mitm.responder_engine",   "ok",   "MITM Responder"),
+    # OSINT
+    ("tools.osint.recon",             "ok",   "OSINT Recon"),
+    ("tools.osint.social_osint",      "ok",   "Social Media OSINT"),
+    # Phishing
+    ("tools.phishing.pages",          "ok",   "Phishing Pages"),
+    ("tools.phishing.server",         "ok",   "Phishing Server"),
+    ("tools.phishing.smtp_sender",    "ok",   "SMTP Sender"),
+    ("tools.phishing.evilginx",       "ok",   "Evilginx 2FA-Bypass"),
+    ("tools.phishing.gophish_engine", "ok",   "GoPhish Integration"),
+    # C2
+    ("tools.c2.amsi_bypass",          "ok",   "AMSI/ETW Bypass"),
+    ("tools.c2.shellcode_engine",     "ok",   "Shellcode Engine"),
+    ("tools.c2.process_hollow",       "ok",   "Process Hollowing"),
+    ("tools.c2.payload_builder",      "ok",   "Payload Builder"),
+    ("tools.c2.telegram_agent",       "ok",   "Telegram C2 Agent"),
+    ("tools.c2.evasion",              "ok",   "Advanced Evasion Suite"),
+    ("tools.c2.uac_bypass",           "ok",   "UAC Bypass Suite"),
+    ("tools.c2.privesc_scanner",      "ok",   "Auto-PrivEsc Scanner"),
+    ("tools.c2.post_exploit",         "ok",   "Post-Exploitation Suite"),
+    # Blue Team
+    ("tools.blueteam",                "ok",   "Blue Team Tools"),
+    # Joker
+    ("tools.joker.kahoot",            "ok",   "Kahoot Tools"),
+    # Sonstiges
+    ("tools.assistant",               "ok",   "KI-Assistent"),
+    ("tools.tutorials",               "ok",   "Tutorials"),
+    ("tools.ai_terminal",             "ok",   "AI Attack Terminal"),
+    ("tools.map_tracker",             "ok",   "Target Map"),
 ]
 
-# ── Externe Tools ─────────────────────────────────────────────────────────────
-# Format: (binary, level, beschreibung, install_cmd)
+# ── Externe Tools ──────────────────────────────────────────────────────────────
+# Format: (binary, level, kategorie, beschreibung, install_cmd)
 EXTERNAL_TOOLS = [
-    # Kritisch
-    ("nmap",           "ok",   "Port/Service Scanner",          "apt install nmap"),
-    ("python3",        "ok",   "Python Runtime",                "vorinstalliert"),
-    ("curl",           "ok",   "HTTP-Client",                   "apt install curl"),
-    ("git",            "ok",   "Version Control",               "apt install git"),
-    # WiFi
-    ("airmon-ng",      "ok",   "WiFi Monitor-Mode",             "apt install aircrack-ng"),
-    ("airodump-ng",    "ok",   "WiFi Packet Capture",           "apt install aircrack-ng"),
-    ("aireplay-ng",    "ok",   "WiFi Deauth/Injection",         "apt install aircrack-ng"),
-    ("hcxdumptool",    "ok",   "PMKID Capture",                 "apt install hcxdumptool"),
-    ("hcxpcapngtool",  "ok",   "PMKID Hash Konvertierung",      "apt install hcxtools"),
-    ("hostapd",        "ok",   "Fake Access Point",             "apt install hostapd"),
-    # Passwörter
-    ("hashcat",        "ok",   "GPU Password Cracker",          "apt install hashcat"),
-    ("john",           "ok",   "John the Ripper",               "apt install john"),
-    ("hydra",          "ok",   "Online Brute-Force",            "apt install hydra"),
-    # Netzwerk/Web
-    ("hping3",         "ok",   "SYN/UDP/ICMP Flood",            "apt install hping3"),
-    ("ffuf",           "warn", "Web Directory Fuzzer",          "apt install ffuf"),
-    ("sqlmap",         "ok",   "SQL Injection",                 "apt install sqlmap"),
-    ("nikto",          "ok",   "Web Vulnerability Scanner",     "apt install nikto"),
-    ("nuclei",         "warn", "CVE/Template Scanner",          "apt install nuclei"),
-    ("wafw00f",        "warn", "WAF Detection",                 "pip3 install wafw00f"),
-    # MITM
-    ("bettercap",      "ok",   "MITM Framework",                "apt install bettercap"),
-    ("responder",      "ok",   "LLMNR/NBT-NS Poisoning",        "apt install responder"),
-    # OSINT
-    ("theHarvester",   "ok",   "Email/Subdomain Harvesting",    "apt install theharvester"),
-    ("sherlock",       "warn", "Username OSINT",                "pip3 install sherlock-project"),
-    ("sublist3r",      "warn", "Subdomain Enumeration",         "apt install sublist3r"),
-    # BeEF
-    ("beef-xss",       "warn", "Browser Exploitation Framework","apt install beef-xss"),
-    # Misc
-    ("openssl",        "ok",   "SSL/TLS Tools",                 "apt install openssl"),
-    ("msfconsole",     "warn", "Metasploit Framework",          "apt install metasploit-framework"),
-    ("msfvenom",       "warn", "Payload Generator",             "apt install metasploit-framework"),
-    ("pyinstaller",    "warn", "EXE Compiler (Disguise)",       "pip3 install pyinstaller"),
+    # ── Basis ──────────────────────────────────────────────────────────────────
+    ("nmap",              "ok",   "Basis",     "Port/Service/OS Scanner",            "apt install nmap"),
+    ("python3",           "ok",   "Basis",     "Python Runtime",                      "vorinstalliert"),
+    ("curl",              "ok",   "Basis",     "HTTP-Client",                         "apt install curl"),
+    ("git",               "ok",   "Basis",     "Version Control",                     "apt install git"),
+    ("go",                "warn", "Basis",     "Go Compiler (Evilginx, dalfox)",      "apt install golang-go"),
+    # ── WiFi ───────────────────────────────────────────────────────────────────
+    ("airmon-ng",         "ok",   "WiFi",      "WiFi Monitor-Mode",                   "apt install aircrack-ng"),
+    ("airodump-ng",       "ok",   "WiFi",      "WiFi Packet Capture",                 "apt install aircrack-ng"),
+    ("aireplay-ng",       "ok",   "WiFi",      "WiFi Deauth/Injection",               "apt install aircrack-ng"),
+    ("hcxdumptool",       "ok",   "WiFi",      "PMKID Capture",                       "apt install hcxdumptool"),
+    ("hcxpcapngtool",     "ok",   "WiFi",      "PMKID Hash Konvertierung",            "apt install hcxtools"),
+    ("hostapd",           "ok",   "WiFi",      "Fake Access Point (Evil Twin)",       "apt install hostapd"),
+    ("dnsmasq",           "ok",   "WiFi",      "Fake DHCP/DNS (Evil Twin)",           "apt install dnsmasq"),
+    # ── Passwörter ─────────────────────────────────────────────────────────────
+    ("hashcat",           "ok",   "Passwörter","GPU Password Cracker",                "apt install hashcat"),
+    ("john",              "ok",   "Passwörter","John the Ripper",                     "apt install john"),
+    ("hydra",             "ok",   "Passwörter","Online Brute-Force",                  "apt install hydra"),
+    # ── Netzwerk / Recon ───────────────────────────────────────────────────────
+    ("hping3",            "ok",   "Netzwerk",  "SYN/UDP/ICMP Flood",                  "apt install hping3"),
+    ("subfinder",         "warn", "Netzwerk",  "Subdomain Finder",                    "apt install subfinder"),
+    ("amass",             "warn", "Netzwerk",  "Subdomain Enumeration",               "apt install amass"),
+    # ── Web ────────────────────────────────────────────────────────────────────
+    ("ffuf",              "ok",   "Web",       "Web Directory/Parameter Fuzzer",      "apt install ffuf"),
+    ("sqlmap",            "ok",   "Web",       "SQL Injection",                       "apt install sqlmap"),
+    ("nikto",             "ok",   "Web",       "Web Vulnerability Scanner",           "apt install nikto"),
+    ("nuclei",            "warn", "Web",       "CVE/Template Scanner",                "apt install nuclei"),
+    ("wafw00f",           "warn", "Web",       "WAF Detection",                       "pip3 install wafw00f"),
+    ("dalfox",            "warn", "Web",       "XSS Scanner (im PATH?)",              "go install github.com/hahwul/dalfox/v2@latest"),
+    # ── MITM ───────────────────────────────────────────────────────────────────
+    ("bettercap",         "ok",   "MITM",      "MITM Framework",                      "apt install bettercap"),
+    ("responder",         "ok",   "MITM",      "LLMNR/NBT-NS Poisoning",              "apt install responder"),
+    ("mitm6",             "warn", "MITM",      "IPv6 MITM / NTLM Relay",              "pip3 install mitm6"),
+    # ── Active Directory / Lateral Movement ────────────────────────────────────
+    ("netexec",           "ok",   "AD/Lateral","Swiss Army Knife für AD",             "apt install netexec"),
+    ("evil-winrm",        "warn", "AD/Lateral","WinRM PTH Shell",                     "gem install evil-winrm"),
+    ("sshuttle",          "warn", "AD/Lateral","Transparenter SSH Tunnel",            "apt install sshuttle"),
+    # ── Metasploit ─────────────────────────────────────────────────────────────
+    ("msfconsole",        "warn", "Metasploit","Metasploit Framework",                "apt install metasploit-framework"),
+    ("msfvenom",          "warn", "Metasploit","MSF Payload Generator",               "apt install metasploit-framework"),
+    # ── OSINT ──────────────────────────────────────────────────────────────────
+    ("theHarvester",      "ok",   "OSINT",     "Email/Subdomain Harvesting",          "apt install theharvester"),
+    ("sherlock",          "warn", "OSINT",     "Username OSINT (300+ Plattformen)",   "pip3 install sherlock-project"),
+    ("sublist3r",         "warn", "OSINT",     "Subdomain Enumeration",               "apt install sublist3r"),
+    # ── Phishing / C2 ──────────────────────────────────────────────────────────
+    ("evilginx",          "warn", "Phishing",  "2FA-Bypass Reverse Proxy",            "go install github.com/kgretzky/evilginx/v3@latest"),
+    ("socat",             "ok",   "C2",        "Versatile Socket Tool",               "apt install socat"),
+    ("openssl",           "ok",   "C2",        "SSL/TLS Tools",                       "apt install openssl"),
+    ("pyinstaller",       "warn", "C2",        "EXE Compiler (Disguise-Tool)",        "pip3 install pyinstaller"),
+    # ── AI / Extras ────────────────────────────────────────────────────────────
+    ("ollama",            "warn", "AI",        "Lokales KI-Modell (AI Terminal)",     "curl -fsSL https://ollama.com/install.sh | sh"),
+    ("beef-xss",          "warn", "Web",       "Browser Exploitation Framework",      "apt install beef-xss"),
+    # ── BloodHound ─────────────────────────────────────────────────────────────
+    ("bloodhound",        "warn", "AD",        "AD Attack Path Visualizer",           "apt install bloodhound"),
+]
+
+
+# ── Python-Pip Module Check ────────────────────────────────────────────────────
+PIP_MODULES = [
+    ("instaloader",  "Instagram OSINT"),
+    ("pypykatz",     "LSASS Dump Analyse"),
+    ("impacket",     "AD / SMB / NTLM Tools"),
+    ("requests",     "HTTP Library"),
+    ("flask",        "Phishing Server"),
+    ("bs4",          "HTML Parser (BeautifulSoup)"),
 ]
 
 
 async def run_health_check() -> AsyncGenerator[str, None]:
     results: list[CheckResult] = []
 
-    # ── Python Module ──────────────────────────────────────────────────────
-    yield "[*] Prüfe Python-Module..."
+    # ── Python Module ──────────────────────────────────────────────────────────
+    yield "[*] Prüfe PenKit Python-Module..."
     ok = warn = fail = 0
+    failed_modules = []
     for module, level, desc in PYTHON_MODULES:
         try:
             importlib.import_module(module)
@@ -112,140 +173,245 @@ async def run_health_check() -> AsyncGenerator[str, None]:
             ok += 1
         except ImportError as e:
             results.append(CheckResult(module, "fail", f"{desc} — {e}"))
+            failed_modules.append((module, desc, str(e)))
             fail += 1
         except Exception as e:
             results.append(CheckResult(module, "warn", f"{desc} — {e}"))
             warn += 1
 
-    yield f"  Module: {ok} OK  |  {warn} Warnung  |  {fail} Fehler"
+    yield f"  Module: {ok} ✓  |  {warn} ⚠  |  {fail} ✗"
 
-    # ── Externe Tools ──────────────────────────────────────────────────────
+    # ── Externe Tools nach Kategorie ───────────────────────────────────────────
     yield "[*] Prüfe externe Tools..."
-    tool_ok = tool_warn = tool_fail = []
-    tool_ok, tool_warn, tool_fail = [], [], []
+    tool_ok: list[tuple] = []
+    tool_warn: list[tuple] = []
+    tool_fail: list[tuple] = []
 
-    for binary, level, desc, install in EXTERNAL_TOOLS:
+    for binary, level, cat, desc, install in EXTERNAL_TOOLS:
         found = shutil.which(binary) is not None
         if found:
-            tool_ok.append((binary, desc))
+            tool_ok.append((binary, cat, desc))
         elif level == "warn":
-            tool_warn.append((binary, desc, install))
+            tool_warn.append((binary, cat, desc, install))
         else:
-            tool_fail.append((binary, desc, install))
+            tool_fail.append((binary, cat, desc, install))
 
-    yield f"  Tools: {len(tool_ok)} installiert  |  {len(tool_warn)} optional fehlt  |  {len(tool_fail)} fehlt"
+    yield f"  Tools: {len(tool_ok)} ✓  |  {len(tool_warn)} optional fehlt  |  {len(tool_fail)} kritisch fehlt"
 
-    # ── System-Checks ──────────────────────────────────────────────────────
+    # ── Pip Module ─────────────────────────────────────────────────────────────
+    yield "[*] Prüfe Python-Pakete (pip)..."
+    pip_ok, pip_fail = [], []
+    for pkg, desc in PIP_MODULES:
+        try:
+            importlib.import_module(pkg)
+            pip_ok.append((pkg, desc))
+        except ImportError:
+            pip_fail.append((pkg, desc))
+
+    yield f"  pip: {len(pip_ok)} ✓  |  {len(pip_fail)} fehlt"
+
+    # ── System-Checks ──────────────────────────────────────────────────────────
     yield "[*] Prüfe System..."
-    import os
-    is_root = os.geteuid() == 0
-    yield f"  Root-Rechte: {'✓ JA' if is_root else '✗ NEIN (sudo -E python3 classic_menu.py)'}"
 
-    # Netzwerk-Interfaces
+    is_root = os.geteuid() == 0
+    yield f"  Root-Rechte: {'✓ JA' if is_root else '✗ NEIN — sudo -E python3 classic_menu.py'}"
+
     try:
         import socket
         hostname = socket.gethostname()
-        yield f"  Hostname: {hostname}"
+        local_ip = socket.gethostbyname(hostname)
+        yield f"  Hostname: {hostname}  |  IP: {local_ip}"
     except Exception:
         pass
 
-    # rockyou.txt
+    # Wordlists
     rockyou = "/usr/share/wordlists/rockyou.txt"
-    rockyou_gz = rockyou + ".gz"
     if os.path.exists(rockyou):
         size = os.path.getsize(rockyou) // 1024 // 1024
         yield f"  rockyou.txt: ✓ ({size} MB)"
-    elif os.path.exists(rockyou_gz):
-        yield f"  rockyou.txt: ~ komprimiert (entpacken: gunzip {rockyou_gz})"
+    elif os.path.exists(rockyou + ".gz"):
+        yield f"  rockyou.txt: ~ komprimiert → gunzip {rockyou}.gz"
     else:
         yield f"  rockyou.txt: ✗ nicht gefunden"
 
-    # ── Detaillierter Report ───────────────────────────────────────────────
+    # Disk Space
+    try:
+        stat = os.statvfs("/")
+        free_gb = stat.f_bavail * stat.f_frsize / 1024**3
+        color = "✓" if free_gb > 10 else ("~" if free_gb > 3 else "✗")
+        yield f"  Disk (frei): {color} {free_gb:.1f} GB"
+    except Exception:
+        pass
+
+    # ── Sonderchecks ──────────────────────────────────────────────────────────
+    yield "[*] Sonderchecks..."
+
+    # Ollama
+    if shutil.which("ollama"):
+        try:
+            proc = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5)
+            models = [l.split()[0] for l in proc.stdout.strip().split("\n")[1:] if l.strip()]
+            if models:
+                yield f"  Ollama: ✓ Modelle: {', '.join(models[:3])}"
+            else:
+                yield f"  Ollama: ~ installiert, kein Modell → ollama pull llama3.2"
+        except Exception:
+            yield f"  Ollama: ~ installiert (kein Status)"
+    else:
+        yield f"  Ollama: ✗ nicht installiert → curl -fsSL https://ollama.com/install.sh | sh"
+
+    # dalfox PATH
+    if shutil.which("dalfox"):
+        yield "  dalfox: ✓ im PATH"
+    elif os.path.exists(os.path.expanduser("~/go/bin/dalfox")):
+        yield "  dalfox: ~ ~/go/bin/dalfox vorhanden → PATH fehlt"
+        yield "         Fix: echo 'export PATH=$PATH:~/go/bin' >> ~/.bashrc && source ~/.bashrc"
+    else:
+        yield "  dalfox: ✗ nicht installiert → go install github.com/hahwul/dalfox/v2@latest"
+
+    # Evilginx
+    if shutil.which("evilginx"):
+        yield "  evilginx: ✓ im PATH"
+    elif os.path.exists(os.path.expanduser("~/go/bin/evilginx")):
+        yield "  evilginx: ~ ~/go/bin/evilginx vorhanden → PATH fehlt"
+    else:
+        yield "  evilginx: ~ nicht installiert → go install github.com/kgretzky/evilginx/v3@latest"
+
+    # impacket
+    try:
+        importlib.import_module("impacket")
+        yield "  impacket: ✓ (Python-Bibliothek)"
+    except ImportError:
+        if shutil.which("impacket-psexec"):
+            yield "  impacket: ✓ (System-Paket)"
+        else:
+            yield "  impacket: ✗ → apt install python3-impacket"
+
+    # Evilginx Phishlets
+    phishlets_dir = os.path.expanduser("~/.evilginx/phishlets")
+    if os.path.isdir(phishlets_dir) and os.listdir(phishlets_dir):
+        count = len([f for f in os.listdir(phishlets_dir) if f.endswith(".yaml")])
+        yield f"  Evilginx Phishlets: ✓ {count} Phishlets in {phishlets_dir}"
+    else:
+        yield f"  Evilginx Phishlets: ~ fehlen → git clone https://github.com/An0nUD4Y/Evilginx2-Phishlets {phishlets_dir}"
+
+    # ── Detaillierter Report ───────────────────────────────────────────────────
     yield ""
-    yield "═" * 60
-    yield "INSTALLIERTE TOOLS:"
-    yield "═" * 60
-    for binary, desc in tool_ok:
-        yield f"  ✓  {binary:<20}  {desc}"
+    yield "═" * 62
+
+    # Nach Kategorie gruppieren
+    from collections import defaultdict
+    by_cat: dict[str, list] = defaultdict(list)
+    for t in tool_ok:
+        by_cat[t[1]].append(t)
+
+    for cat in ["Basis", "WiFi", "Passwörter", "Netzwerk", "Web", "MITM",
+                "AD/Lateral", "Metasploit", "OSINT", "Phishing", "C2", "AD", "AI"]:
+        items = by_cat.get(cat, [])
+        if items:
+            yield f"✓ {cat}: {', '.join(b for b, _, _ in items)}"
 
     if tool_warn:
         yield ""
-        yield "OPTIONALE TOOLS (nicht kritisch):"
-        for binary, desc, install in tool_warn:
-            yield f"  ~  {binary:<20}  {desc}"
-            yield f"     Install: {install}"
+        yield "~ OPTIONALE TOOLS (nicht installiert):"
+        for binary, cat, desc, install in tool_warn:
+            yield f"  ~  {binary:<22} [{cat}]  {desc}"
+            yield f"       {install}"
 
     if tool_fail:
         yield ""
-        yield "FEHLENDE TOOLS (wichtige Funktionen eingeschränkt):"
-        for binary, desc, install in tool_fail:
-            yield f"  ✗  {binary:<20}  {desc}"
-            yield f"     Install: {install}"
+        yield "✗ FEHLENDE TOOLS (kritisch):"
+        for binary, cat, desc, install in tool_fail:
+            yield f"  ✗  {binary:<22} [{cat}]  {desc}"
+            yield f"       {install}"
 
-    fail_modules = [r for r in results if r.status == "fail"]
-    if fail_modules:
+    if pip_fail:
         yield ""
-        yield "PYTHON-MODUL FEHLER:"
-        for r in fail_modules:
-            yield f"  ✗  {r.name:<35}  {r.detail}"
+        yield "~ FEHLENDE PIP-PAKETE:"
+        for pkg, desc in pip_fail:
+            yield f"  ~  {pkg:<22} {desc}"
+            yield f"       pip3 install {pkg} --break-system-packages"
+
+    if failed_modules:
+        yield ""
+        yield "✗ PYTHON-MODUL FEHLER:"
+        for mod, desc, err in failed_modules:
+            yield f"  ✗  {mod:<35} {desc}"
 
     yield ""
-    yield "═" * 60
+    yield "═" * 62
     total_ok = len(tool_ok)
     total = len(EXTERNAL_TOOLS)
     pct = int(total_ok / total * 100)
-    yield f"GESAMT: {total_ok}/{total} Tools installiert ({pct}%)"
-    if pct == 100:
-        yield "🏆 Perfekt! Alle Tools verfügbar."
-    elif pct >= 75:
-        yield "✓ Gut — Kernfunktionen verfügbar."
+    yield f"GESAMT: {total_ok}/{total} Tools ({pct}%)  |  {len(pip_ok)}/{len(PIP_MODULES)} pip-Pakete"
+    if pct >= 90:
+        yield "🏆 Exzellent — fast alles verfügbar!"
+    elif pct >= 70:
+        yield "✓ Gut — Kernfunktionen alle verfügbar."
     elif pct >= 50:
-        yield "~ Basis funktioniert — fehlende Tools installieren."
+        yield "~ Basis funktioniert — optionale Tools installieren."
     else:
-        yield "✗ Viele Tools fehlen — apt-get update && apt-get upgrade empfohlen."
-    yield "═" * 60
+        yield "✗ Viele Tools fehlen — apt update && apt upgrade empfohlen."
+    yield "═" * 62
 
-    # ── Zuverlässigkeits-Guide ────────────────────────────────────────────────
+    # ── Reliability Guide ─────────────────────────────────────────────────────
     yield ""
-    yield "═" * 60
+    yield "═" * 62
     yield "WANN KLAPPEN DIE TOOLS — EHRLICHER GUIDE:"
-    yield "═" * 60
+    yield "═" * 62
     yield ""
-    yield "✅ IMMER ZUVERLÄSSIG (direkter Wrapper, keine Abhängigkeiten):"
-    yield "  Hashcat / John     — Offline, rein lokal. Klappt immer wenn Hash korrekt."
-    yield "  Hydra               — Klappt immer. Nur langsam bei Rate-Limiting."
-    yield "  Nmap Scanner        — Klappt immer. Root für SYN-Scan nötig."
-    yield "  Phishing Server     — Reines Python, keine Deps. Klappt 100%."
-    yield "  SMTP Sender         — Klappt wenn SMTP-Zugangsdaten korrekt sind."
-    yield "  Smart Wordlist Gen  — Reines Python. Klappt immer."
-    yield "  AMSI/ETW Bypass PS1 — Generierter Code. Klappt auf Win 10/11."
-    yield "  Telegram C2 Agent   — Generiert PS1. Klappt wenn Token+Chat-ID stimmt."
-    yield "  DLL Unhooking       — Klappt auf Win 10/11 Home/Pro. Enterprise: je nach EDR."
+    yield "✅ IMMER ZUVERLÄSSIG:"
+    yield "  Hashcat / John       — Offline, lokal. Klappt immer wenn Hash korrekt."
+    yield "  Hydra                — Klappt immer. Nur langsam bei Rate-Limiting."
+    yield "  Nmap                 — Klappt immer. Root für SYN-Scan nötig."
+    yield "  Phishing Server      — Reines Python. Klappt 100%."
+    yield "  AMSI/ETW Bypass PS1  — Generierter Code. Klappt auf Win 10/11."
+    yield "  Telegram C2 Agent    — Klappt wenn Token + Chat-ID stimmt."
+    yield "  UAC Bypass           — fodhelper/computerdefaults: Win10/11 meist zuverlässig."
+    yield "  WiFi Passwords PS1   — netsh wlan: klappt immer (kein Admin nötig)."
+    yield "  Browser Passwords    — DPAPI: klappt für Chrome v79 und älter direkt."
+    yield "                          Chrome v80+: Master Key nötig → Telegram Agent nutzen."
+    yield "  Keylogger PS1        — SetWindowsHookEx: klappt auf Win 10/11 ohne Admin."
+    yield "  Screenshot PS1       — System.Windows.Forms: klappt immer."
+    yield "  WiFi PTH/Crack       — klappt wenn Handshake aufgezeichnet + schwaches PW."
     yield ""
     yield "⚠️  MEISTENS — aber mit Bedingungen:"
-    yield "  WiFi Handshake      — ✓ wenn Kanal+BSSID korrekt + Client ist aktiv."
-    yield "                        ✗ wenn kein Client verbunden → kein Handshake möglich."
-    yield "  PMKID Attack        — ✓ bei vielen Routern (WPA2). ✗ bei WPA3."
-    yield "  WPS Pixie-Dust      — ✓ bei ~25% alter Router. ✗ bei gepatchten Geräten."
-    yield "  Reaver Brute        — ✓ wenn WPS nicht gesperrt. ✗ nach WPS Lockout."
-    yield "  Bettercap ARP/SSL   — ✓ im LAN. ✗ wenn Switch Port-Security hat."
-    yield "  Responder/mitm6     — ✓ in AD-Netzen ohne IPv6-Schutz. ✗ mit SMB-Signing."
-    yield "  Shodan              — ✓ mit API-Key voll nutzbar. ✗ ohne = nur Demos."
-    yield "  Auto-Crack Pipeline — ✓ wenn Monitor-Mode stabil. ✗ bei schlechtem Signal."
+    yield "  WiFi Handshake       — ✓ wenn Client aktiv verbunden ist."
+    yield "                          ✗ kein Client → kein Handshake (dann PMKID versuchen)."
+    yield "  PMKID                — ✓ bei ~70% der WPA2-Router. ✗ bei WPA3 / neueren APs."
+    yield "  Pass-the-Hash        — ✓ wenn SMB-Signing deaktiviert. ✗ mit SMB-Signing."
+    yield "  NTLM Relay           — ✓ in AD ohne SMB-Signing + ohne EPA."
+    yield "                          ✗ wenn SMB-Signing erzwungen (moderne AD-Defaults)."
+    yield "  Auto-PrivEsc Scanner — ✓ findet echte Vektoren. ✗ wenn System gut gehärtet."
+    yield "  UAC Bypass           — ✓ Win10/11 Standard. ✗ Win11 23H2+ mit neuen Defaults."
+    yield "  Evilginx 2FA-Bypass  — ✓ wenn Opfer Phishing-Link öffnet + keine Cert-Warning."
+    yield "                          ✗ wenn Ziel-Site Advanced AiTM-Detection hat (Cloudflare)."
+    yield "  Lateral Movement     — ✓ im internen Netz. ✗ wenn SMB-Firewall aktiv."
+    yield "  Responder            — ✓ in alten AD-Netzen. ✗ wenn LLMNR/NBT-NS deaktiviert."
+    yield "  Bettercap ARP/SSL    — ✓ im LAN. ✗ wenn Switch Port-Security aktiv."
+    yield "  Metasploit Exploits  — ✓ für ungepatchte Systeme. ✗ bei gepatchten Systemen."
+    yield "  Process Hollowing    — ✓ Win10 Home/Pro. ✗ Win11 + EDR (CrowdStrike etc.)."
+    yield "  Webcam (WIA)         — ✓ auf 90% der Windows-Systeme mit Kamera."
+    yield "                          ✗ wenn Kamera durch Gruppenrichtlinie gesperrt."
     yield ""
-    yield "🎲  VARIABEL — hängt stark vom Ziel ab:"
-    yield "  SQLmap              — ✓ wenn echte SQLi vorhanden. ✗ bei WAF ohne Bypass."
-    yield "  nikto/nuclei        — ✓ findet bekannte Lücken. ✗ bei gepatchten Servern."
-    yield "  Evil Twin           — ✓ wenn Nutzer verbindet. ✗ wenn Nutzer Zertifikat prüft."
-    yield "  Process Hollowing   — ✓ Win10 Home. ⚠ Win11 + CrowdStrike = schwieriger."
-    yield "  Sleep Obfuscation   — ✓ vs. Defender. ⚠ vs. CrowdStrike Falcon = test nötig."
-    yield "  BeEF Integration    — ✓ wenn BeEF läuft + Browser kein CSP hat."
+    yield "🎲  VARIABEL — stark vom Ziel abhängig:"
+    yield "  SQLmap               — ✓ wenn echte SQLi vorhanden. ✗ bei WAF ohne Bypass."
+    yield "  nikto/nuclei         — ✓ findet bekannte Lücken. ✗ bei gepatchten Servern."
+    yield "  Evil Twin            — ✓ wenn Nutzer verbindet + kein 802.1X."
+    yield "  Shodan               — ✓ mit API-Key voll nutzbar. ✗ ohne = nur Demos."
+    yield "  Snapchat Location    — ✓ wenn Ghost Mode aus. ✗ wenn Ghost Mode an."
+    yield "  WhatsApp Online Track— ✓ wenn Datenschutzeinst. 'Alle' zeigt. ✗ bei 'Niemand'."
+    yield "  AI Terminal (Ollama) — ✓ wenn Modell installiert. Qualität: llama3.2 > mistral."
     yield ""
     yield "❌  HÄUFIGE FEHLERQUELLEN:"
-    yield "  [1] Kein root       → sudo -E python3 classic_menu.py"
-    yield "  [2] Monitor-Mode    → airmon-ng start wlan0 (vor WiFi-Angriffen)"
-    yield "  [3] rockyou fehlt   → gunzip /usr/share/wordlists/rockyou.txt.gz"
-    yield "  [4] Tool fehlt      → apt install <tool> oder pip3 install <tool>"
-    yield "  [5] BSSID falsch    → genau so eingeben wie im Scanner (Groß/Kleinschrift!)"
-    yield "  [6] Kali veraltet   → apt update && apt upgrade"
-    yield "═" * 60
+    yield "  [1] Kein root         → sudo -E python3 classic_menu.py"
+    yield "  [2] Monitor-Mode      → airmon-ng start wlan0 (vor WiFi-Angriffen)"
+    yield "  [3] rockyou fehlt     → gunzip /usr/share/wordlists/rockyou.txt.gz"
+    yield "  [4] dalfox PATH       → echo 'export PATH=$PATH:~/go/bin' >> ~/.bashrc"
+    yield "  [5] BSSID falsch      → genau so eingeben wie im Scanner (Groß/Kleinschrift!)"
+    yield "  [6] SMB-Signing       → netexec smb <ziel> --gen-relay-list targets.txt"
+    yield "  [7] Kali veraltet     → apt update && apt full-upgrade"
+    yield "  [8] Ollama kein Modell→ ollama pull llama3.2"
+    yield "  [9] Evilginx DNS      → Wildcard-DNS: * → Server-IP setzen"
+    yield " [10] Chrome PW v80+    → Telegram C2 Agent nutzen (hat direkten DPAPI-Zugriff)"
+    yield "═" * 62

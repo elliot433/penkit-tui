@@ -2657,7 +2657,7 @@ async def menu_health():
             # Fehlende Tools finden
             apt_missing = []
             pip_missing = []
-            for binary, level, desc, install in EXTERNAL_TOOLS:
+            for binary, level, category, desc, install in EXTERNAL_TOOLS:
                 if shutil.which(binary) is None:
                     if install.startswith("apt"):
                         apt_missing.append((binary, desc, install))
