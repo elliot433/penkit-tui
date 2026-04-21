@@ -270,7 +270,15 @@ class BeaconFlood:
         # SSID-Datei erstellen
         ssid_file = "/tmp/penkit_ssids.txt"
         if ssid_list:
-            names = ssid_list
+            import random, string
+            if len(ssid_list) < count:
+                names = []
+                for i in range(count):
+                    base = ssid_list[i % len(ssid_list)]
+                    suffix = "".join(random.choices(string.digits, k=4))
+                    names.append(f"{base}-{suffix}")
+            else:
+                names = ssid_list
         elif random_names:
             import random, string
             names = []
@@ -290,7 +298,7 @@ class BeaconFlood:
             names = [f"PenKit-{i:04d}" for i in range(count)]
 
         with open(ssid_file, "w") as f:
-            f.write("\n".join(names))
+            f.write("\n".join(names) + "\n")
 
         yield f"[*] {len(names)} SSIDs generiert → {ssid_file}"
         yield "[!] Alle Geräte in Reichweite sehen diese Netzwerke..."
