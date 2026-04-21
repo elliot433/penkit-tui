@@ -4029,6 +4029,116 @@ async def menu_lateral():
         wait_key()
 
 
+async def menu_mobile():
+    """Mobile Attacks — iOS + Android."""
+    while True:
+        banner()
+        section("📱  MOBILE ATTACKS", "iOS (AirDrop · MDM · iCloud · KARMA) + Android (APK · ADB · drozer)")
+        print(f"  {RD}{B}⛔  NUR auf eigenen/autorisierten Geräten!{R}\n")
+        print(f"  {Y}── iOS ──────────────────────────────────────────────────{R}")
+        menu_item(" 1", "📡  AirDrop Reconnaissance",   "🟡", "Gerätename, MAC, SHA256-Hash passiv sniffing")
+        menu_item(" 2", "📋  MDM Config Profile",       "⛔", "VPN/Proxy ohne Jailbreak — Traffic interception")
+        menu_item(" 3", "📶  KARMA WiFi Attack",        "🔴", "iOS Auto-Connect-Exploit via hostapd-karma")
+        menu_item(" 4", "🍎  Apple ID Brute-Force",     "⛔", "pyicloud credential stuffing + Rate-Limit bypass")
+        menu_item(" 5", "🔬  iCloud Backup Forensik",   "🟡", "MVT + libimobiledevice — Pegasus-Check")
+        menu_item(" 6", "📨  Smishing Payloads",        "🔴", "SMS-Phishing Vorlagen für Apple ID / iCloud")
+        print()
+        print(f"  {Y}── Android ──────────────────────────────────────────────{R}")
+        menu_item(" 7", "🤖  Meterpreter APK Wizard",  "⛔", "Android-RAT generieren, signieren, verteilen")
+        menu_item(" 8", "🔌  ADB Exploitation",         "⛔", "USB-Debugging + Netzwerk-ADB (Port 5555)")
+        menu_item(" 9", "🔍  drozer Framework",         "🔴", "Android App Schwachstellen-Scanner")
+        menu_item(" 0", "🗂️   Android Forensik",         "🟡", "ALEAPP, SQLite DBs, androidqf")
+        print()
+        menu_item(" B", "🔙  Zurück", "")
+        choice = prompt("mobile")
+        if choice in ("b", "B", ""):
+            return
+
+        if choice == "1":
+            banner()
+            from tools.mobile.ios_attack import airdrop_recon
+            async for line in airdrop_recon():
+                slow(line)
+            wait_key()
+
+        elif choice == "2":
+            banner()
+            section("📋  MDM Config Profile", "VPN + Proxy ohne Jailbreak")
+            org = prompt("Organisations-Name [IT Sicherheit GmbH]") or "IT Sicherheit GmbH"
+            domain = prompt("Phishing-Domain [secure-update.net]") or "secure-update.net"
+            server_ip = prompt("Server-IP [192.168.1.100]") or "192.168.1.100"
+            from tools.mobile.ios_attack import generate_mdm_profile, mdm_setup_guide
+            import os
+            out = os.path.expanduser("~/penkit-output/mdm_profile.mobileconfig")
+            with open(out, "w") as f:
+                f.write(generate_mdm_profile(org, domain, server_ip))
+            slow(f"\n  {G}[✓] Profil gespeichert: {out}{R}\n")
+            async for line in mdm_setup_guide(domain, server_ip):
+                slow(line)
+            wait_key()
+
+        elif choice == "3":
+            banner()
+            from tools.mobile.ios_attack import karma_attack_guide
+            async for line in karma_attack_guide():
+                slow(line)
+            wait_key()
+
+        elif choice == "4":
+            banner()
+            from tools.mobile.ios_attack import appleid_bruteforce_guide
+            async for line in appleid_bruteforce_guide():
+                slow(line)
+            wait_key()
+
+        elif choice == "5":
+            banner()
+            from tools.mobile.ios_attack import icloud_forensics_guide
+            async for line in icloud_forensics_guide():
+                slow(line)
+            wait_key()
+
+        elif choice == "6":
+            banner()
+            section("📨  Smishing Payloads", "SMS-Phishing für iOS Apple ID")
+            url = prompt("Phishing-URL") or "https://apple-id-secure.net/signin"
+            from tools.mobile.ios_attack import show_smishing_payloads
+            async for line in show_smishing_payloads(url):
+                slow(line)
+            wait_key()
+
+        elif choice == "7":
+            banner()
+            section("🤖  Android Meterpreter APK", "")
+            lhost = prompt("LHOST (Kali-IP)") or "192.168.1.100"
+            lport = int(prompt("LPORT [4444]") or "4444")
+            from tools.mobile.android_attack import show_apk_wizard
+            async for line in show_apk_wizard(lhost, lport):
+                slow(line)
+            wait_key()
+
+        elif choice == "8":
+            banner()
+            from tools.mobile.android_attack import adb_exploitation
+            async for line in adb_exploitation():
+                slow(line)
+            wait_key()
+
+        elif choice == "9":
+            banner()
+            from tools.mobile.android_attack import drozer_guide
+            async for line in drozer_guide():
+                slow(line)
+            wait_key()
+
+        elif choice == "0":
+            banner()
+            from tools.mobile.android_attack import android_forensics
+            async for line in android_forensics():
+                slow(line)
+            wait_key()
+
+
 async def menu_msf():
     """Metasploit Framework — vollständiger MSF-Workflow."""
     while True:
@@ -4281,6 +4391,7 @@ async def main_menu():
         menu_item(" P", "🔥  Post-Exploitation",     "⛔", "WinPEAS, LSASS Dump, Persistence, Exfil, LOLBAS")
         menu_item(" L", "🔀  Lateral Movement",      "⛔", "PTH, PTT, SMBExec, WMIExec, NTLM Relay, Pivot")
         menu_item(" X", "💣  Metasploit",            "⛔", "Payloads, Handler, Top-Exploits, Post-Modules, RC")
+        menu_item(" K", "📱  Mobile Attacks",        "⛔", "iOS AirDrop/MDM/iCloud, Android APK/ADB/drozer")
         print(f"  {DIM}├{'─'*66}┤{R}")
         print(f"  {DIM}│{'  🔵  BLUE TEAM  /  🃏  JOKER':^66}│{R}")
         print(f"  {DIM}├{'─'*66}┤{R}")
@@ -4317,6 +4428,7 @@ async def main_menu():
             "p": menu_postexploit, "P": menu_postexploit,
             "l": menu_lateral, "L": menu_lateral,
             "x": menu_msf, "X": menu_msf,
+            "k": menu_mobile, "K": menu_mobile,
             "j": menu_joker, "J": menu_joker,
             "?": menu_assistant,
             "t": menu_tutorials, "T": menu_tutorials,
