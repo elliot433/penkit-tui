@@ -1035,6 +1035,8 @@ async def menu_osint():
         menu_item("T", "🎵  TikTok OSINT",                        "🟡", "Profil-Stats, Follower, Videos")
         menu_item("X", "🐦  Twitter/X OSINT",                     "🟡", "Profil via Nitter (kein API-Key)")
         menu_item("S", "💀  Credential Stuffing",                  "⛔", "Cred-Liste gegen Plattform testen")
+        menu_item("N", "👻  Snapchat OSINT",                       "🟡", "Profil, Snapcode, Story, Location Tracker")
+        menu_item("W", "💬  WhatsApp OSINT",                       "🟡", "Online-Tracker, Nummer prüfen, Aktivitätsprofil")
         menu_item("0", "Back")
 
         choice = prompt("osint")
@@ -1282,6 +1284,68 @@ async def menu_osint():
                 stop.lower() == "j",
             ))
 
+        elif choice in ("n", "N"):
+            banner(); section("👻  SNAPCHAT OSINT", "Profil · Snapcode · Story · Location Tracker")
+            info_box([
+                "Snapchat-Profil OSINT via öffentliche API.",
+                "",
+                "  → Profil + Snapcode herunterladen (kein Login nötig)",
+                "  → Öffentliche Stories abrufen",
+                "  → Location Tracker (wenn Ghost Mode deaktiviert)",
+                "  → Snap Map Standort-Monitoring",
+            ])
+            print()
+            print(f"  {C}[1]{R} Snapchat Profil + Snapcode")
+            print(f"  {C}[2]{R} Location Tracker (Snap Map)")
+            print()
+            sub = prompt("snap")
+            username = ask("Snapchat Username (ohne @)")
+            if not username:
+                wait_key(); continue
+            print()
+            from tools.osint.social_osint import snapchat_profile, snapchat_location_tracker
+            if sub == "2":
+                try:
+                    interval = int(ask("Check-Intervall in Minuten", "5"))
+                    duration = int(ask("Tracking-Dauer in Minuten", "60"))
+                except ValueError:
+                    interval, duration = 5, 60
+                await run_tool_live(snapchat_location_tracker(username, interval, duration))
+            else:
+                await run_tool_live(snapchat_profile(username))
+
+        elif choice in ("w", "W"):
+            banner(); section("💬  WHATSAPP OSINT", "Online-Tracker · Nummer prüfen · Aktivitätsprofil")
+            info_box([
+                "WhatsApp OSINT — Aktivitätsmuster analysieren.",
+                "",
+                "  [1] Nummer prüfen — existiert bei WhatsApp? Profilbild?",
+                "  [2] Online-Tracker — wann ist jemand online? (Selenium)",
+                "",
+                "Online-Tracker braucht:",
+                "  pip3 install selenium webdriver-manager --break-system-packages",
+                "  + Chromium auf Kali + einmalig QR-Scan in WhatsApp Web",
+            ])
+            print()
+            print(f"  {C}[1]{R} Nummer prüfen (sofort, kein Login)")
+            print(f"  {C}[2]{R} Online-Tracker (Script generieren, braucht Selenium)")
+            print()
+            sub = prompt("wa")
+            phone = ask("Telefonnummer (mit Ländercode, ohne +, z.B. 491701234567)", required=True)
+            if not phone:
+                wait_key(); continue
+            print()
+            from tools.osint.social_osint import whatsapp_info, whatsapp_online_tracker
+            if sub == "2":
+                try:
+                    duration = int(ask("Tracking-Dauer in Minuten", "60"))
+                    interval = int(ask("Check-Intervall in Sekunden", "30"))
+                except ValueError:
+                    duration, interval = 60, 30
+                await run_tool_live(whatsapp_online_tracker(phone, duration, interval))
+            else:
+                await run_tool_live(whatsapp_info(phone))
+
         wait_key()
 
 
@@ -1431,6 +1495,8 @@ async def menu_phishing():
     menu_item(" 3", "🔗  GoPhish Integration",           "⛔", "Professionelle Kampagnen via GoPhish API")
     menu_item(" 4", "📄  Verfügbare Seiten anzeigen",    "🟡", "Google, Microsoft, Instagram, TikTok, Snapchat, Discord...")
     menu_item(" 5", "📋  Gespeicherte Credentials",      "🟡", "Zeigt alle gefangenen Passwörter aus letztem Run")
+    print()
+    menu_item(" E", "🪝  Evilginx 2FA-Bypass",          "⛔", "Reverse Proxy — klaut Session-Cookie, bypassed 2FA")
     print()
     menu_item(" 0", "← Zurück", "")
     print()
@@ -1666,6 +1732,94 @@ async def menu_phishing():
                     print(f"  {G}[{i}]{R}  {Y}{c['ip']:<16}{R}  {W}{c['username']:<30}{R}  {RD}{c['password']}{R}")
                     print(f"       {DIM}{c['timestamp']}  —  {c.get('page','?')}{R}")
                     print()
+        wait_key()
+
+    elif choice == "e":
+        banner(); section("🪝  EVILGINX 2FA-BYPASS", "Reverse Proxy — Session-Cookie abfangen, 2FA umgehen")
+        info_box([
+            "Evilginx = Man-in-the-Middle Reverse Proxy für Phishing.",
+            "",
+            "Normales Phishing: klaut Passwort → 2FA blockiert Angreifer.",
+            "Evilginx: klaut Passwort UND Session-Cookie → 2FA komplett egal!",
+            "",
+            "Ablauf:",
+            "  1. Opfer öffnet Phishing-Link (sieht aus wie echte Login-Seite)",
+            "  2. Opfer gibt User + Passwort + 2FA ein (echte Seite via Proxy)",
+            "  3. Evilginx fängt Session-Cookie ab",
+            "  4. Angreifer nutzt Cookie → eingeloggt ohne 2FA zu kennen",
+            "",
+            "Braucht: Domain (~10€/Jahr) + Wildcard-DNS + Evilginx v3",
+        ])
+        print()
+        print(f"  {Y}[1]{R} Setup Wizard (neue Kampagne einrichten)")
+        print(f"  {Y}[2]{R} Phishlet anzeigen (verfügbare Ziel-Seiten)")
+        print(f"  {Y}[3]{R} Sessions & Credentials überwachen")
+        print(f"  {Y}[4]{R} Cookie → Browser-Login Anleitung")
+        print(f"  {Y}[5]{R} Installation & Voraussetzungen")
+        print()
+        sub = prompt("evilginx")
+
+        from tools.phishing.evilginx import (
+            PHISHLETS, evilginx_wizard, generate_lure_commands,
+            monitor_sessions, extract_cookies_guide, generate_setup_commands,
+        )
+
+        if sub == "1":
+            banner(); section("🪝  EVILGINX SETUP WIZARD", "")
+            print(f"\n  {Y}Verfügbare Phishlets:{R}")
+            for key, p in PHISHLETS.items():
+                print(f"  {C}{key:<14}{R} {p['icon']} {p['name']:<14} {DIM}{p['desc'][:50]}{R}")
+            print()
+            phishlet = ask("Phishlet wählen (z.B. google)", "google")
+            domain   = ask("Deine Phishing-Domain (z.B. secure-accounts.net)", required=True)
+            if not domain: wait_key(); return
+            server_ip = ask("Server-IP (wo Evilginx läuft)", required=True)
+            if not server_ip: wait_key(); return
+            redirect = ask("Redirect-URL nach Login", "https://google.com")
+            print()
+            await run_tool_live(evilginx_wizard(phishlet, domain, server_ip, redirect))
+
+        elif sub == "2":
+            banner(); section("🪝  EVILGINX PHISHLETS", "Verfügbare Ziel-Seiten")
+            print()
+            for key, p in PHISHLETS.items():
+                print(f"  {p['icon']} \033[33m{p['name']:<14}\033[0m {DIM}{key:<14}{R}  {p['desc']}")
+                print(f"    {DIM}Session-Cookies: {', '.join(p['cookie_targets'][:3])}...\033[0m")
+                print()
+
+        elif sub == "3":
+            banner(); section("📡  EVILGINX SESSION MONITOR", "Aktive Sessions + abgefangene Credentials")
+            await run_tool_live(monitor_sessions())
+
+        elif sub == "4":
+            banner(); section("🍪  COOKIE → BROWSER LOGIN", "Abgefangenen Session-Cookie nutzen")
+            await run_tool_live(extract_cookies_guide())
+
+        elif sub == "5":
+            banner(); section("⚙️  EVILGINX INSTALLATION", "Voraussetzungen + Setup")
+            info_box([
+                "Schritt 1: Domain kaufen (~10€/Jahr bei Namecheap, Cloudflare)",
+                "  → Wildcard DNS: * → deine Server-IP",
+                "  → A Record: domain.com → deine Server-IP",
+                "",
+                "Schritt 2: Evilginx v3 installieren:",
+            ])
+            print()
+            print(f"  {C}# Methode 1: Go (empfohlen):{R}")
+            print(f"  {W}go install github.com/kgretzky/evilginx/v3@latest{R}")
+            print()
+            print(f"  {C}# Methode 2: apt:{R}")
+            print(f"  {W}apt install evilginx2{R}")
+            print()
+            print(f"  {C}# Methode 3: Binary von GitHub:{R}")
+            print(f"  {W}https://github.com/kgretzky/evilginx2/releases{R}")
+            print()
+            print(f"  {C}# Community Phishlets (Google, M365 etc.):{R}")
+            print(f"  {W}git clone https://github.com/An0nUD4Y/Evilginx2-Phishlets ~/.evilginx/phishlets{R}")
+            print()
+            print(f"  {Y}[→] Firewall-Ports öffnen:{R}")
+            print(f"  {C}ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 53/udp{R}")
+
         wait_key()
 
 

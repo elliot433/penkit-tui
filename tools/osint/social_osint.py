@@ -398,3 +398,231 @@ async def credential_stuff(
             yield f"  \033[32m✓ {h}\033[0m"
     else:
         yield f"\n\033[33m[~] Keine gültigen Credentials gefunden ({len(creds)} versucht).\033[0m"
+
+
+# ── Snapchat OSINT ────────────────────────────────────────────────────────────
+
+async def snapchat_profile(username: str) -> AsyncGenerator[str, None]:
+    """
+    Snapchat-Profil via öffentliche Snapchat-API (kein Login nötig).
+    Holt: Anzeigename, Bitmoji, Snapcode, Story-Vorschau, Subscriber-Count.
+    """
+    runner = CommandRunner()
+    out_file = out_dir("osint") / f"snapchat_{username}.json"
+
+    yield f"\033[1;36m[*] Snapchat OSINT: @{username}\033[0m\n"
+
+    # Öffentliche Story API
+    url = f"https://story.snapchat.com/@{username}"
+    yield f"\033[33m[→] Story-Seite: {url}\033[0m"
+
+    # API-Endpunkt für Profil-Daten
+    api_url = f"https://www.snapchat.com/add/{username}"
+    yield f"\033[33m[→] Profil-URL: {api_url}\033[0m\n"
+
+    yield "\033[33m[*] Lade Profil-Daten...\033[0m"
+    async for line in runner.run([
+        "curl", "-sL",
+        "-H", "User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)",
+        "-H", "Accept: application/json",
+        f"https://story.snapchat.com/api/v1/user/{username}/story",
+    ]):
+        if line.strip() and not line.startswith("<"):
+            yield f"  \033[36m{line[:120]}\033[0m"
+
+    yield ""
+    yield "\033[33m[*] Snapcode (QR) herunterladen:\033[0m"
+    snapcode_url = f"https://app.snapchat.com/web/deeplink/snapcode?username={username}&type=PNG&size=240"
+    snapcode_file = out_dir("osint") / f"snapchat_{username}_snapcode.png"
+    async for line in runner.run(["curl", "-sL", "-o", str(snapcode_file), snapcode_url]):
+        yield f"  {line}"
+    yield f"\033[32m[+] Snapcode gespeichert: {snapcode_file}\033[0m"
+
+    yield ""
+    yield "\033[33m[*] Snapchat Map (öffentliche Orte):\033[0m"
+    yield f"\033[36m  https://map.snapchat.com/  → Nutzer in Snapchat Map suchen\033[0m"
+    yield f"\033[36m  Tipp: Snap Map zeigt letzten Standort wenn 'Our Story' aktiv\033[0m"
+
+    yield ""
+    yield "\033[33m[*] Story-Archiv (ohne Login):\033[0m"
+    yield f"\033[36m  python3 -c \"import requests; r=requests.get('{url}'); print(r.text[:500])\"\033[0m"
+
+
+async def snapchat_location_tracker(
+    username: str,
+    interval_min: int = 5,
+    duration_min: int = 60,
+) -> AsyncGenerator[str, None]:
+    """
+    Snapchat-Standort-Tracker via Snap Map API.
+    Prüft alle N Minuten ob sich der Standort geändert hat.
+    Funktioniert nur wenn Nutzer Snap Map aktiviert hat (Ghost Mode aus).
+    """
+    runner = CommandRunner()
+    yield f"\033[1;36m[*] Snapchat Location Tracker: @{username}\033[0m"
+    yield f"\033[90m    Intervall: alle {interval_min} min | Dauer: {duration_min} min\033[0m\n"
+
+    yield "\033[33m[*] Snap Map API abfragen...\033[0m"
+    yield "\033[36m    Snap Map nutzt GraphQL — Koordinaten nur sichtbar wenn\033[0m"
+    yield "\033[36m    a) Ghost Mode ist deaktiviert UND\033[0m"
+    yield "\033[36m    b) Nutzer ist als Freund hinzugefügt\033[0m"
+    yield ""
+    yield "\033[33m[→] Alternativer Ansatz (ohne Freundschaft):\033[0m"
+    yield "\033[36m    Wenn Nutzer Snaps mit Orts-Tag postet → Metadaten extrahieren\033[0m"
+
+    # Script für kontinuierliches Monitoring
+    script = f"""#!/bin/bash
+# Snapchat Location Monitor für @{username}
+# Läuft {duration_min} Minuten, prüft alle {interval_min} Minuten
+
+USERNAME="{username}"
+END_TIME=$(( $(date +%s) + {duration_min * 60} ))
+LAST_LOCATION=""
+
+echo "[*] Starte Location Monitor für @$USERNAME"
+while [ $(date +%s) -lt $END_TIME ]; do
+    LOC=$(curl -s "https://story.snapchat.com/@$USERNAME" | grep -o '"location":\\{{[^}}]*\\}}' | head -1)
+    if [ "$LOC" != "$LAST_LOCATION" ] && [ -n "$LOC" ]; then
+        echo "[!] Standort-Änderung: $LOC"
+        LAST_LOCATION="$LOC"
+    fi
+    sleep {interval_min * 60}
+done
+echo "[*] Monitor beendet"
+"""
+    script_file = out_dir("osint") / f"snap_tracker_{username}.sh"
+    script_file.write_text(script)
+    yield f"\033[32m[+] Tracker-Script: {script_file}\033[0m"
+    yield f"\033[36m    bash {script_file}\033[0m"
+
+
+# ── WhatsApp OSINT ────────────────────────────────────────────────────────────
+
+async def whatsapp_online_tracker(
+    phone: str,
+    duration_min: int = 60,
+    interval_sec: int = 30,
+) -> AsyncGenerator[str, None]:
+    """
+    WhatsApp Online-Status Tracker.
+    Erkennt wann jemand online ist (grüner Punkt) und erstellt Aktivitätsprofil.
+    Braucht: selenium + Chrome + eine WhatsApp Web Session.
+    pip3 install selenium webdriver-manager
+    """
+    runner = CommandRunner()
+    out_file = out_dir("osint") / f"wa_tracker_{phone}.json"
+
+    yield f"\033[1;36m[*] WhatsApp Online Tracker: {phone}\033[0m"
+    yield f"\033[90m    Dauer: {duration_min} min | Check alle {interval_sec}s\033[0m\n"
+
+    yield "\033[33m[*] Voraussetzungen:\033[0m"
+    yield "\033[36m    pip3 install selenium webdriver-manager --break-system-packages\033[0m"
+    yield "\033[36m    Chromium muss auf Kali installiert sein\033[0m"
+    yield ""
+
+    # Python-Script generieren das Selenium nutzt
+    tracker_script = f"""#!/usr/bin/env python3
+\"\"\"WhatsApp Online Tracker für {phone}\"\"\"
+import time, json, sys
+from datetime import datetime
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from webdriver_manager.chrome import ChromeDriverManager
+except ImportError:
+    print("Install: pip3 install selenium webdriver-manager --break-system-packages")
+    sys.exit(1)
+
+PHONE   = "{phone}"
+OUTFILE = "{out_file}"
+DURATION = {duration_min * 60}
+INTERVAL = {interval_sec}
+
+opts = webdriver.ChromeOptions()
+opts.add_argument("--no-sandbox")
+opts.add_argument("--disable-dev-shm-usage")
+# opts.add_argument("--headless")  # Headless = kein QR-Scan möglich
+
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+driver.get("https://web.whatsapp.com")
+
+print("[*] Scanne den QR-Code in WhatsApp Web...")
+input("[*] Enter drücken sobald eingeloggt: ")
+
+# Zum Chat navigieren
+driver.get(f"https://web.whatsapp.com/send?phone={{PHONE}}")
+time.sleep(5)
+
+log = []
+end_time = time.time() + DURATION
+print(f"[*] Starte Tracking für {{DURATION//60}} Minuten...")
+
+while time.time() < end_time:
+    try:
+        # Online-Status finden
+        header = driver.find_element(By.CSS_SELECTOR, "header span[title]")
+        status = header.get_attribute("title")
+        ts = datetime.now().strftime("%H:%M:%S")
+
+        if "online" in status.lower():
+            print(f"[!] {{ts}} ONLINE")
+            log.append({{"time": ts, "status": "online"}})
+        elif "zuletzt" in status.lower() or "last seen" in status.lower():
+            print(f"[ ] {{ts}} offline ({{status}})")
+            log.append({{"time": ts, "status": "offline", "last_seen": status}})
+        else:
+            print(f"[ ] {{ts}} {{status}}")
+    except Exception as e:
+        pass
+    time.sleep(INTERVAL)
+
+driver.quit()
+with open(OUTFILE, "w") as f:
+    json.dump(log, f, indent=2, ensure_ascii=False)
+
+online_count = sum(1 for e in log if e["status"] == "online")
+print(f"\\n[+] Log gespeichert: {{OUTFILE}}")
+print(f"[+] Online-Events: {{online_count}} von {{len(log)}} Checks")
+"""
+
+    script_file = out_dir("osint") / f"wa_tracker_{phone}.py"
+    script_file.write_text(tracker_script)
+    yield f"\033[32m[+] Tracker-Script generiert: {script_file}\033[0m"
+    yield f"\033[36m    python3 {script_file}\033[0m"
+    yield ""
+    yield "\033[33m[*] Aktivitätsprofil erstellen:\033[0m"
+    yield "\033[36m    Aus Tracking-Daten lässt sich ablesen:\033[0m"
+    yield "\033[36m    → Wann die Person schläft / aufwacht\033[0m"
+    yield "\033[36m    → Wann sie arbeitet\033[0m"
+    yield "\033[36m    → Mit wem sie (zeitgleich) online ist\033[0m"
+
+
+async def whatsapp_info(phone: str) -> AsyncGenerator[str, None]:
+    """
+    WhatsApp-Nummer prüfen: existiert die Nummer? Profilbild? Status?
+    Nutzt die inoffizielle WhatsApp API (wa.me Redirect).
+    """
+    runner = CommandRunner()
+
+    yield f"\033[1;36m[*] WhatsApp Info: +{phone}\033[0m\n"
+
+    yield "\033[33m[→] Nummer prüfen (existiert bei WA?):\033[0m"
+    yield f"\033[36m    curl -sI 'https://wa.me/{phone}' | grep -i 'location\\|HTTP'\033[0m"
+    yield ""
+
+    async for line in runner.run([
+        "curl", "-sI", f"https://wa.me/{phone}",
+    ]):
+        if "location" in line.lower() or "HTTP" in line:
+            yield f"  \033[36m{line.strip()}\033[0m"
+
+    yield ""
+    yield "\033[33m[→] Profilbild herunterladen (braucht WA-Kontakt oder Link-Preview):\033[0m"
+    yield f"\033[36m    curl -sL 'https://i.wa.me/{phone}' -o wa_pic_{phone}.jpg\033[0m"
+    yield ""
+    yield "\033[33m[→] Zahl der Klicks/Views tracken:\033[0m"
+    yield f"\033[36m    # Eigenen Tracking-Link erstellen:\033[0m"
+    yield f"\033[36m    # https://wa.me/{phone}?text=Hallo  →  via bit.ly/tinyurl weiterleiten\033[0m"
