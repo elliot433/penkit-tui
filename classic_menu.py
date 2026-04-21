@@ -4029,6 +4029,176 @@ async def menu_lateral():
         wait_key()
 
 
+async def menu_recon():
+    """Auto-Recon Pipeline + Searchsploit + CVE Lookup."""
+    while True:
+        banner()
+        section("🔭  AUTO-RECON / CVE", "Pipeline · Searchsploit · Nuclei · CVE Details")
+        print(f"  {RD}{B}⛔  NUR auf autorisierten Zielen!{R}\n")
+        menu_item(" 1", "🚀  Vollautomatische Recon Pipeline", "🔴", "Domain → Subdomains → Ports → Web → Nuclei → Report")
+        menu_item(" 2", "🔬  Einzelne Phasen ausführen",       "🟡", "Subdomains / Live-Check / Portscan / Fingerprint")
+        menu_item(" 3", "💥  Searchsploit — Exploit suchen",   "🔴", "Begriff oder Software+Version → Exploit-DB")
+        menu_item(" 4", "📋  CVE Details + EPSS",              "🟡", "CVE-Nummer → Beschreibung, CVSS, Exploit-Wahrsch.")
+        menu_item(" 5", "🤖  Auto-Exploit aus Nmap-Output",    "🔴", "Nmap-Datei → alle Services → automatisch Exploits")
+        menu_item(" 6", "📊  Top CVEs 2024",                   "🟡", "Hochkritische aktuelle Exploits anzeigen")
+        print()
+        menu_item(" B", "🔙  Zurück", "")
+        choice = prompt("recon")
+        if choice in ("b", "B", ""):
+            return
+
+        elif choice == "1":
+            banner()
+            section("🚀  AUTO-RECON PIPELINE", "")
+            domain = prompt("Target-Domain (z.B. example.com)")
+            if not domain:
+                wait_key(); continue
+            fast = prompt("Schnell-Scan? [j/n]").lower() in ("j", "y")
+            nuclei = prompt("Nuclei Vulnerability Scan? [j/n]").lower() in ("j", "y")
+            from tools.recon.auto_recon import full_pipeline
+            await run_tool_live(full_pipeline(domain, fast=fast, skip_nuclei=not nuclei))
+            wait_key()
+
+        elif choice == "2":
+            banner()
+            section("🔬  EINZELNE RECON PHASEN", "")
+            print(f"  {C}[1]{R} Subdomain Enumeration  {C}[2]{R} Live-Host Check")
+            print(f"  {C}[3]{R} Port Scan               {C}[4]{R} Web Fingerprinting")
+            print(f"  {C}[5]{R} Nuclei Scan             {C}[6]{R} Screenshots (gowitness)")
+            print()
+            phase = prompt("phase")
+            from core.output_dir import get as out_dir
+            import os
+            base = out_dir()
+
+            if phase == "1":
+                domain = prompt("Domain")
+                if domain:
+                    out = os.path.join(base, "subdomains.txt")
+                    from tools.recon.auto_recon import enumerate_subdomains
+                    await run_tool_live(enumerate_subdomains(domain, out))
+            elif phase == "2":
+                subs = prompt(f"Subdomains-Datei [{base}/subdomains.txt]") or os.path.join(base, "subdomains.txt")
+                out  = os.path.join(base, "live_hosts.txt")
+                from tools.recon.auto_recon import check_live_hosts
+                await run_tool_live(check_live_hosts(subs, out))
+            elif phase == "3":
+                live = prompt(f"Live-Hosts-Datei [{base}/live_hosts.txt]") or os.path.join(base, "live_hosts.txt")
+                out  = os.path.join(base, "portscan.txt")
+                from tools.recon.auto_recon import port_scan
+                await run_tool_live(port_scan(live, out))
+            elif phase == "4":
+                live = prompt(f"Live-Hosts-Datei [{base}/live_hosts.txt]") or os.path.join(base, "live_hosts.txt")
+                out  = os.path.join(base, "fingerprint.txt")
+                from tools.recon.auto_recon import web_fingerprint
+                await run_tool_live(web_fingerprint(live, out))
+            elif phase == "5":
+                live = prompt(f"Live-Hosts-Datei [{base}/live_hosts.txt]") or os.path.join(base, "live_hosts.txt")
+                out  = os.path.join(base, "vulnerabilities.txt")
+                from tools.recon.auto_recon import nuclei_scan
+                await run_tool_live(nuclei_scan(live, out))
+            elif phase == "6":
+                live = prompt(f"Live-Hosts-Datei [{base}/live_hosts.txt]") or os.path.join(base, "live_hosts.txt")
+                out  = os.path.join(base, "screenshots")
+                from tools.recon.auto_recon import take_screenshots
+                await run_tool_live(take_screenshots(live, out))
+            wait_key()
+
+        elif choice == "3":
+            banner()
+            section("💥  SEARCHSPLOIT", "Exploit-DB Suche")
+            query = prompt("Suchbegriff (z.B. 'Apache 2.4.49' oder 'CVE-2021-44228')")
+            if query:
+                from tools.recon.searchsploit_engine import search_exploit
+                await run_tool_live(search_exploit(query))
+                print()
+                edb = prompt("Exploit-ID anzeigen? (leer = überspringen)")
+                if edb.strip():
+                    from tools.recon.searchsploit_engine import get_exploit
+                    await run_tool_live(get_exploit(edb.strip()))
+            wait_key()
+
+        elif choice == "4":
+            banner()
+            section("📋  CVE DETAILS + EPSS", "NVD + Exploit-DB + Exploit-Wahrscheinlichkeit")
+            cve = prompt("CVE-Nummer (z.B. CVE-2021-44228)")
+            if cve:
+                from tools.recon.searchsploit_engine import cve_lookup
+                await run_tool_live(cve_lookup(cve))
+            wait_key()
+
+        elif choice == "5":
+            banner()
+            section("🤖  AUTO-EXPLOIT AUS NMAP-OUTPUT", "")
+            from core.output_dir import get as out_dir
+            default_nmap = os.path.join(out_dir(), "portscan.txt")
+            nmap_file = prompt(f"Nmap-Datei [{default_nmap}]") or default_nmap
+            from tools.recon.searchsploit_engine import auto_exploit_search
+            await run_tool_live(auto_exploit_search(nmap_file))
+            wait_key()
+
+        elif choice == "6":
+            banner()
+            from tools.recon.searchsploit_engine import show_top_cves
+            await run_tool_live(show_top_cves())
+            wait_key()
+
+
+async def menu_cloud():
+    """Cloud Attacks — AWS, GitHub Secret Scan."""
+    while True:
+        banner()
+        section("☁️   CLOUD ATTACKS", "AWS S3 · Metadata Theft · Credential Check · GitHub Leaks")
+        print(f"  {RD}{B}⛔  NUR auf autorisierten Systemen / eigenen Accounts!\033[0m\n")
+        menu_item(" 1", "🪣  S3 Bucket Enumeration",      "🔴", "Öffentliche AWS S3 Buckets für Domain finden")
+        menu_item(" 2", "🔑  EC2 Metadata Credential Theft", "⛔", "169.254.169.254 — IAM Keys via SSRF/Shell")
+        menu_item(" 3", "✅  AWS Credential Validator",   "🔴", "Gestohlene Keys auf IAM-Berechtigungen prüfen")
+        menu_item(" 4", "🔍  GitHub Secret Scan",         "🔴", "truffleHog / gitleaks — API Keys in Repos finden")
+        print()
+        menu_item(" B", "🔙  Zurück", "")
+        choice = prompt("cloud")
+        if choice in ("b", "B", ""):
+            return
+
+        elif choice == "1":
+            banner()
+            section("🪣  S3 BUCKET ENUMERATION", "")
+            company = prompt("Unternehmensname / Domain (z.B. 'amazon' oder 'shopify')")
+            region  = prompt("AWS Region [us-east-1]") or "us-east-1"
+            if company:
+                from tools.cloud.aws_recon import enumerate_s3_buckets
+                await run_tool_live(enumerate_s3_buckets(company, region))
+            wait_key()
+
+        elif choice == "2":
+            banner()
+            section("🔑  AWS METADATA CREDENTIAL THEFT", "EC2 IAM-Credentials stehlen")
+            ssrf_url = prompt("SSRF-URL (leer = nur Anleitung)") or ""
+            from tools.cloud.aws_recon import steal_ec2_credentials
+            await run_tool_live(steal_ec2_credentials(ssrf_url))
+            wait_key()
+
+        elif choice == "3":
+            banner()
+            section("✅  AWS CREDENTIAL VALIDATOR", "")
+            ak = prompt("Access Key ID (AKIA...)")
+            sk = prompt("Secret Access Key")
+            tok = prompt("Session Token (leer wenn keiner)") or ""
+            if ak and sk:
+                from tools.cloud.aws_recon import check_aws_credentials
+                await run_tool_live(check_aws_credentials(ak, sk, tok))
+            wait_key()
+
+        elif choice == "4":
+            banner()
+            section("🔍  GITHUB SECRET SCAN", "truffleHog / gitleaks")
+            target = prompt("GitHub User oder User/Repo (z.B. 'microsoft' oder 'microsoft/vscode')")
+            if target:
+                from tools.cloud.aws_recon import github_secret_scan
+                await run_tool_live(github_secret_scan(target))
+            wait_key()
+
+
 async def menu_mobile():
     """Mobile Attacks — iOS + Android."""
     while True:
@@ -4392,6 +4562,8 @@ async def main_menu():
         menu_item(" L", "🔀  Lateral Movement",      "⛔", "PTH, PTT, SMBExec, WMIExec, NTLM Relay, Pivot")
         menu_item(" X", "💣  Metasploit",            "⛔", "Payloads, Handler, Top-Exploits, Post-Modules, RC")
         menu_item(" K", "📱  Mobile Attacks",        "⛔", "iOS AirDrop/MDM/iCloud, Android APK/ADB/drozer")
+        menu_item(" V", "🔭  Auto-Recon / CVE",      "🔴", "Subfinder+httpx+Nuclei Pipeline, Searchsploit, EPSS")
+        menu_item(" C", "☁️   Cloud Attacks",          "⛔", "S3 Buckets, AWS Metadata, GitHub Secret Scan")
         print(f"  {DIM}├{'─'*66}┤{R}")
         print(f"  {DIM}│{'  🔵  BLUE TEAM  /  🃏  JOKER':^66}│{R}")
         print(f"  {DIM}├{'─'*66}┤{R}")
@@ -4429,6 +4601,8 @@ async def main_menu():
             "l": menu_lateral, "L": menu_lateral,
             "x": menu_msf, "X": menu_msf,
             "k": menu_mobile, "K": menu_mobile,
+            "v": menu_recon,  "V": menu_recon,
+            "c": menu_cloud,  "C": menu_cloud,
             "j": menu_joker, "J": menu_joker,
             "?": menu_assistant,
             "t": menu_tutorials, "T": menu_tutorials,
