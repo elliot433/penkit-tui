@@ -81,6 +81,14 @@ PYTHON_MODULES = [
     ("tools.blueteam",                "ok",   "Blue Team Tools"),
     # Joker
     ("tools.joker.kahoot",            "ok",   "Kahoot Tools"),
+    # Mobile
+    ("tools.mobile.ios_attack",       "ok",   "iOS Attack Suite"),
+    ("tools.mobile.android_attack",   "ok",   "Android Attack Suite"),
+    # Recon / CVE
+    ("tools.recon.auto_recon",        "ok",   "Auto-Recon Pipeline"),
+    ("tools.recon.searchsploit_engine","ok",  "Searchsploit / CVE Engine"),
+    # Cloud
+    ("tools.cloud.aws_recon",         "ok",   "AWS / Cloud Attack Suite"),
     # Sonstiges
     ("tools.assistant",               "ok",   "KI-Assistent"),
     ("tools.tutorials",               "ok",   "Tutorials"),
@@ -140,6 +148,16 @@ EXTERNAL_TOOLS = [
     ("socat",             "ok",   "C2",        "Versatile Socket Tool",               "apt install socat"),
     ("openssl",           "ok",   "C2",        "SSL/TLS Tools",                       "apt install openssl"),
     ("pyinstaller",       "warn", "C2",        "EXE Compiler (Disguise-Tool)",        "pip3 install pyinstaller"),
+    # ── Mobile ─────────────────────────────────────────────────────────────────
+    ("adb",               "warn", "Mobile",    "Android Debug Bridge",                "apt install adb"),
+    ("ideviceinfo",       "warn", "Mobile",    "iOS USB Forensik (libimobiledevice)", "apt install libimobiledevice-utils"),
+    # ── Cloud / Recon ──────────────────────────────────────────────────────────
+    ("aws",               "warn", "Cloud",     "AWS CLI (S3, IAM, EC2)",              "apt install awscli"),
+    ("searchsploit",      "warn", "Recon",     "Exploit-DB Suche",                    "apt install exploitdb"),
+    ("whatweb",           "warn", "Recon",     "Web Fingerprinting",                  "apt install whatweb"),
+    ("httpx",             "warn", "Recon",     "HTTP Probe (Live-Host-Check)",        "go install github.com/projectdiscovery/httpx/cmd/httpx@latest"),
+    ("gowitness",         "warn", "Recon",     "Web Screenshots",                     "go install github.com/sensepost/gowitness@latest"),
+    ("gitleaks",          "warn", "Cloud",     "Git Secret Scanner",                  "apt install gitleaks"),
     # ── AI / Extras ────────────────────────────────────────────────────────────
     ("ollama",            "warn", "AI",        "Lokales KI-Modell (AI Terminal)",     "curl -fsSL https://ollama.com/install.sh | sh"),
     ("beef-xss",          "warn", "Web",       "Browser Exploitation Framework",      "apt install beef-xss"),
@@ -156,6 +174,10 @@ PIP_MODULES = [
     ("requests",     "HTTP Library"),
     ("flask",        "Phishing Server"),
     ("bs4",          "HTML Parser (BeautifulSoup)"),
+    ("nicegui",      "Web UI (python3 web_app.py)"),
+    ("boto3",        "AWS Python SDK (Cloud Attacks)"),
+    ("pyicloud",     "Apple iCloud API (iOS Brute-Force)"),
+    ("trufflehog",   "Git Secret Scanner (GitHub Leaks)"),
 ]
 
 
@@ -295,6 +317,32 @@ async def run_health_check() -> AsyncGenerator[str, None]:
     else:
         yield f"  Evilginx Phishlets: ~ fehlen → git clone https://github.com/An0nUD4Y/Evilginx2-Phishlets {phishlets_dir}"
 
+    # Go-Tools PATH check
+    go_bin = os.path.expanduser("~/go/bin")
+    go_tools = ["subfinder", "httpx", "nuclei", "amass", "gowitness"]
+    missing_go = [t for t in go_tools if not shutil.which(t) and not os.path.exists(os.path.join(go_bin, t))]
+    if missing_go:
+        yield f"  Go-Tools fehlen: {', '.join(missing_go)}"
+        yield f"  → PATH prüfen: export PATH=$PATH:~/go/bin"
+    else:
+        present = [t for t in go_tools if shutil.which(t) or os.path.exists(os.path.join(go_bin, t))]
+        yield f"  Go-Tools: ✓ {', '.join(present)}"
+
+    # nuclei Templates
+    nuclei_tpl = os.path.expanduser("~/.local/nuclei-templates")
+    nuclei_tpl2 = os.path.expanduser("~/nuclei-templates")
+    if os.path.isdir(nuclei_tpl) or os.path.isdir(nuclei_tpl2):
+        yield "  Nuclei Templates: ✓ vorhanden"
+    else:
+        yield "  Nuclei Templates: ~ fehlen → nuclei -update-templates"
+
+    # Web UI check
+    try:
+        importlib.import_module("nicegui")
+        yield "  Web UI (NiceGUI): ✓ → python3 web_app.py → http://localhost:8080"
+    except ImportError:
+        yield "  Web UI (NiceGUI): ~ nicht installiert → pip3 install nicegui --break-system-packages"
+
     # ── Detaillierter Report ───────────────────────────────────────────────────
     yield ""
     yield "═" * 62
@@ -306,7 +354,8 @@ async def run_health_check() -> AsyncGenerator[str, None]:
         by_cat[t[1]].append(t)
 
     for cat in ["Basis", "WiFi", "Passwörter", "Netzwerk", "Web", "MITM",
-                "AD/Lateral", "Metasploit", "OSINT", "Phishing", "C2", "AD", "AI"]:
+                "AD/Lateral", "Metasploit", "OSINT", "Phishing", "C2", "Mobile",
+                "Cloud", "Recon", "AD", "AI"]:
         items = by_cat.get(cat, [])
         if items:
             yield f"✓ {cat}: {', '.join(b for b, _, _ in items)}"
@@ -414,4 +463,33 @@ async def run_health_check() -> AsyncGenerator[str, None]:
     yield "  [8] Ollama kein Modell→ ollama pull llama3.2"
     yield "  [9] Evilginx DNS      → Wildcard-DNS: * → Server-IP setzen"
     yield " [10] Chrome PW v80+    → Telegram C2 Agent nutzen (hat direkten DPAPI-Zugriff)"
+    yield " [11] Go-Tools kein PATH→ echo 'export PATH=$PATH:~/go/bin' >> ~/.bashrc && source ~/.bashrc"
+    yield " [12] Nuclei keine Tpl  → nuclei -update-templates"
+    yield " [13] Web UI startet nicht → pip3 install nicegui --break-system-packages"
+    yield " [14] S3 Enum langsam   → normal, wartet auf HTTP-Timeouts (5s pro Bucket)"
+    yield " [15] iOS MDM blockt    → Profil muss HTTPS sein + Let's Encrypt Zertifikat"
+    yield "═" * 62
+    yield ""
+    yield "SCHNELL-INSTALL — alles auf einmal:"
+    yield "═" * 62
+    yield "  # Basis (apt):"
+    yield "  sudo apt install -y nmap aircrack-ng hashcat john hydra ffuf sqlmap nikto"
+    yield "  sudo apt install -y bettercap responder netexec adb exploitdb whatweb"
+    yield "  sudo apt install -y subfinder amass bloodhound libimobiledevice-utils awscli"
+    yield ""
+    yield "  # Go-Tools:"
+    yield "  go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+    yield "  go install github.com/projectdiscovery/httpx/cmd/httpx@latest"
+    yield "  go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+    yield "  go install github.com/hahwul/dalfox/v2@latest"
+    yield "  go install github.com/kgretzky/evilginx/v3@latest"
+    yield "  go install github.com/sensepost/gowitness@latest"
+    yield "  nuclei -update-templates"
+    yield "  echo 'export PATH=$PATH:~/go/bin' >> ~/.bashrc && source ~/.bashrc"
+    yield ""
+    yield "  # pip3:"
+    yield "  pip3 install instaloader pypykatz requests flask bs4 nicegui boto3 pyicloud --break-system-packages"
+    yield ""
+    yield "  # Ollama (KI):"
+    yield "  curl -fsSL https://ollama.com/install.sh | sh && ollama pull llama3.2"
     yield "═" * 62

@@ -44,7 +44,7 @@ def banner():
 {DG}  ╚═╝     ╚══════╝╚═╝  ╚══╝╚═╝  ╚═╝╚═╝   ╚═╝{R}
 {DIM}  ┌────────────────────────────────────────────────────────┐{R}
 {DIM}  │  {R}{C}Authorized Pentesting Toolkit  v3.0{R}{DIM}                    │{R}
-{DIM}  │  {R}{DG}? = Assistent  |  T = Tutorials  |  H = Health Check{R}{DIM}   │{R}
+{DIM}  │  {R}{DG}? = KI  |  H = Health  |  V = Recon  |  C = Cloud{R}{DIM}          │{R}
 {DIM}  └────────────────────────────────────────────────────────┘{R}
 """
     print(art)
@@ -2613,8 +2613,10 @@ async def menu_health():
     while True:
         banner()
         section("🏥  HEALTH CHECK", "Prüft Python-Module + externe Tools + System")
-        menu_item(" 1", "🔍  Health Check starten",    "🟢", "Zeigt was installiert ist und was fehlt")
-        menu_item(" 2", "🔧  Auto-Fix: Tools installieren", "🟡", "Fehlende Tools automatisch per apt/pip installieren")
+        menu_item(" 1", "🔍  Health Check starten",         "🟢", "Zeigt was installiert ist und was fehlt")
+        menu_item(" 2", "🔧  Auto-Fix: Tools installieren", "🟡", "Fehlende apt/pip Tools automatisch installieren")
+        menu_item(" 3", "📦  Schnell-Install Guide",        "🟢", "Alle Install-Befehle auf einen Blick")
+        menu_item(" 4", "🌐  Web UI starten",               "🟢", "NiceGUI Browser-Interface auf localhost:8080")
         menu_item(" 0", "← Zurück", "")
         print()
         choice = prompt("health")
@@ -2707,6 +2709,61 @@ async def menu_health():
                     print(f"  {RD}[!] {e}{R}")
 
             print(f"\n  {G}[✓] Auto-Fix abgeschlossen!{R}")
+
+        elif choice == "3":
+            clr()
+            section("📦  SCHNELL-INSTALL", "Alles auf einmal installieren")
+            print(f"""
+  {Y}# ── Schritt 1: apt (Basis + Tools) ─────────────────────────────────────{R}
+  {C}sudo apt install -y nmap aircrack-ng hashcat john hydra ffuf sqlmap nikto{R}
+  {C}sudo apt install -y bettercap responder netexec adb exploitdb whatweb{R}
+  {C}sudo apt install -y subfinder amass bloodhound libimobiledevice-utils awscli{R}
+  {C}sudo apt install -y golang-go socat openssl gitleaks{R}
+
+  {Y}# ── Schritt 2: Go-Tools ─────────────────────────────────────────────────{R}
+  {C}go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest{R}
+  {C}go install github.com/projectdiscovery/httpx/cmd/httpx@latest{R}
+  {C}go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest{R}
+  {C}go install github.com/hahwul/dalfox/v2@latest{R}
+  {C}go install github.com/kgretzky/evilginx/v3@latest{R}
+  {C}go install github.com/sensepost/gowitness@latest{R}
+  {C}nuclei -update-templates{R}
+  {C}echo 'export PATH=$PATH:~/go/bin' >> ~/.bashrc && source ~/.bashrc{R}
+
+  {Y}# ── Schritt 3: pip3 ─────────────────────────────────────────────────────{R}
+  {C}pip3 install instaloader pypykatz requests flask bs4 --break-system-packages{R}
+  {C}pip3 install nicegui boto3 pyicloud mitm6 wafw00f --break-system-packages{R}
+
+  {Y}# ── Schritt 4: Ollama (KI) ──────────────────────────────────────────────{R}
+  {C}curl -fsSL https://ollama.com/install.sh | sh{R}
+  {C}ollama pull llama3.2{R}
+
+  {Y}# ── Schritt 5: Evilginx Phishlets ──────────────────────────────────────{R}
+  {C}git clone https://github.com/An0nUD4Y/Evilginx2-Phishlets ~/.evilginx/phishlets{R}
+""")
+            wait_key(); continue
+
+        elif choice == "4":
+            clr()
+            section("🌐  WEB UI STARTEN", "NiceGUI Browser-Interface")
+            try:
+                import nicegui
+                print(f"  {G}[✓] NiceGUI installiert (v{nicegui.__version__}){R}")
+                print(f"\n  {Y}Starte Web UI...{R}")
+                print(f"  {C}python3 {os.path.join(os.path.dirname(__file__), 'web_app.py')}{R}")
+                print(f"\n  {G}Dann im Browser öffnen: http://localhost:8080{R}\n")
+                print(f"  {DIM}(Web UI läuft parallel — dieses Terminal-Fenster offen lassen){R}")
+                import subprocess
+                subprocess.Popen(
+                    ["python3", os.path.join(os.path.dirname(os.path.abspath(__file__)), "web_app.py")],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                print(f"\n  {G}[✓] Web UI wurde gestartet! Browser: http://localhost:8080{R}")
+            except ImportError:
+                print(f"  {RD}[✗] NiceGUI nicht installiert!{R}")
+                print(f"  {C}pip3 install nicegui --break-system-packages{R}")
+            wait_key(); continue
+
         wait_key()
 
 
