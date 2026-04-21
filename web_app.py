@@ -684,36 +684,46 @@ def main_page():
 
         ui.separator().style('border-color: #1a2744; margin: 8px 0')
 
-        # Category nav
-        cat_buttons: dict[str, ui.element] = {}
-        content_area = None  # forward ref
+        # Category nav — ui.button für zuverlässige Klick-Events
+        cat_buttons: dict[str, ui.button] = {}
 
         def make_nav_click(cat_id):
             def click():
                 active_cat['id'] = cat_id
-                for cid, el in cat_buttons.items():
-                    el.classes(replace='cat-item active' if cid == cat_id else 'cat-item')
+                for cid, btn in cat_buttons.items():
+                    if cid == cat_id:
+                        btn.style('background:rgba(0,255,136,0.1);color:#00ff88;'
+                                  'border-left:3px solid #00ff88;padding-left:13px')
+                    else:
+                        btn.style('background:transparent;color:#64748b;'
+                                  'border-left:3px solid transparent;padding-left:16px')
                 render_category(cat_id)
             return click
 
         for cat in CATEGORIES:
-            with ui.element('div').classes('cat-item').on('click', make_nav_click(cat['id'])) as btn:
-                ui.icon(cat['icon']).style(f'color:{cat["color"]};font-size:18px')
-                ui.label(cat['label']).style('flex:1')
+            btn = ui.button(
+                icon=cat['icon'], text=cat['label'],
+                on_click=make_nav_click(cat['id'])
+            ).style(
+                'width:100%;justify-content:flex-start;gap:10px;'
+                'background:transparent;color:#64748b;border-radius:8px;'
+                'border-left:3px solid transparent;padding-left:16px;'
+                'font-size:13px;font-weight:500;margin:2px 8px;'
+            )
             cat_buttons[cat['id']] = btn
 
-        # set first active
-        cat_buttons[CATEGORIES[0]['id']].classes(add='active')
+        # erste Kategorie aktiv markieren
+        cat_buttons[CATEGORIES[0]['id']].style(
+            'width:100%;justify-content:flex-start;gap:10px;'
+            'background:rgba(0,255,136,0.1);color:#00ff88;border-radius:8px;'
+            'border-left:3px solid #00ff88;padding-left:13px;'
+            'font-size:13px;font-weight:500;margin:2px 8px;'
+        )
 
         ui.separator().style('border-color: #1a2744; margin: 8px 0')
-
-        # Quick links
-        def start_classic():
-            ui.notify('Starte classic_menu.py im Terminal: python3 classic_menu.py', type='info', timeout=5000)
-
-        with ui.element('div').classes('cat-item').on('click', start_classic).style('margin-top:auto'):
-            ui.icon('terminal').style('color:#64748b;font-size:18px')
-            ui.label('Classic TUI').style('color:#64748b;font-size:13px')
+        ui.label('Terminal TUI: sudo python3 classic_menu.py').style(
+            'color:#64748b;font-size:11px;padding:8px 16px;font-family:JetBrains Mono'
+        )
 
     # ── Main content ──────────────────────────────────────────────────────────
     with ui.column().classes('w-full').style('padding: 24px; gap: 0'):
@@ -751,7 +761,7 @@ def main_page():
 
         cards_area.clear()
         with cards_area:
-            for tool in cat['tools']:
+            for tool in cat['tools']:  # noqa
                 badge_col = BADGE_COLOR.get(tool['badge'], '#64748b')
                 danger_txt = DANGER_TEXT.get(tool['badge'], '')
 
