@@ -175,7 +175,7 @@ async def menu_wifi():
                 await t.stop()
 
         elif choice == "2":
-            iface = ask("Monitor interface", cfg.get("monitor_interface", "wlan0mon"))
+            iface = ask("Monitor interface", cfg.get("monitor_interface", "wlan0"))
             bssid = ask("Target BSSID (AA:BB:CC:DD:EE:FF)", required=True)
             channel = ask("Channel", "6")
             t = HandshakeCapture(iface, cfg.get("output_dir", "/tmp"))
@@ -195,7 +195,7 @@ async def menu_wifi():
                 await t.stop()
 
         elif choice == "4":
-            iface = ask("Monitor interface", cfg.get("monitor_interface", "wlan0mon"))
+            iface = ask("Monitor interface", cfg.get("monitor_interface", "wlan0"))
             bssid = ask("Target BSSID", required=True)
             client = ask("Client MAC", "FF:FF:FF:FF:FF:FF")
             count = ask_int("Count (0=continuous)", 0)
@@ -223,7 +223,7 @@ async def menu_wifi():
                 "Locked=No → Pixie-Dust oder Reaver möglich",
                 "Locked=Yes → Router hat WPS nach Fehlversuchen gesperrt",
             ])
-            iface = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            iface = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0"))
             timeout = ask_int("Scan-Dauer (Sekunden)", 30)
             t = WPSScanner(iface)
             try:
@@ -239,7 +239,7 @@ async def menu_wifi():
                 "Monitor-Mode muss aktiv sein (airmon-ng start wlan0).",
                 "BSSID: MAC-Adresse des Routers (z.B. AA:BB:CC:DD:EE:FF)",
             ])
-            iface   = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            iface   = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0"))
             bssid   = ask("Ziel BSSID", required=True)
             channel = ask("Kanal", "6")
             t = PixieDust(iface)
@@ -256,7 +256,7 @@ async def menu_wifi():
                 "Delay = Wartezeit zwischen Versuchen (empfohlen: 1-2 Sekunden).",
                 "Reaver macht automatisch Pause bei Rate-Limiting.",
             ])
-            iface   = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            iface   = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0"))
             bssid   = ask("Ziel BSSID", required=True)
             channel = ask("Kanal", "6")
             delay   = float(ask("Delay zwischen Versuchen (Sek)", "1.0"))
@@ -274,7 +274,7 @@ async def menu_wifi():
                 "Gut für: Ablenkung während Evil-Twin läuft.",
                 "Benötigt: mdk4 (apt install mdk4)",
             ])
-            iface  = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            iface  = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0"))
             count  = ask_int("Anzahl Fake-SSIDs", 200)
             custom = ask("Eigene SSIDs (kommagetrennt, leer=zufällig)", "")
             ssid_list = [s.strip() for s in custom.split(",") if s.strip()] if custom else None
@@ -295,7 +295,7 @@ async def menu_wifi():
                 "  5. Crackt mit Wordlist",
                 "Alle Dateien → ~/penkit-output/wifi/",
             ])
-            iface    = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0mon"))
+            iface    = ask("Monitor Interface", cfg.get("monitor_interface", "wlan0"))
             bssid    = ask("Ziel BSSID", required=True)
             channel  = ask("Kanal", "6")
             wordlist = ask("Wordlist", cfg.get("wordlist", "/usr/share/wordlists/rockyou.txt"))

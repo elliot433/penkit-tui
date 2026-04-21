@@ -2,6 +2,7 @@ from core.runner import CommandRunner
 from core.danger import DangerLevel
 from ui.widgets.help_panel import ToolHelp
 import re
+import subprocess
 from dataclasses import dataclass, field
 from typing import AsyncGenerator
 
@@ -11,10 +12,24 @@ HELP = ToolHelp(
     description="Scans for nearby WiFi networks using airodump-ng. Shows SSID, BSSID, channel, encryption, and signal strength.",
     usage="Requires monitor mode. The interface will be put into monitor mode automatically.",
     danger_note="🟡 Low Risk — passive scan, no packets sent to targets.",
-    example="airodump-ng wlan0mon",
+    example="airodump-ng wlan0",
 )
 
 DANGER = DangerLevel.YELLOW
+
+
+def _detect_monitor_iface(interface: str) -> str:
+    """Returns the actual monitor interface name (handles drivers that don't rename to wlan0mon)."""
+    try:
+        result = subprocess.run(["iwconfig"], capture_output=True, text=True)
+        for line in result.stdout.split("\n"):
+            if "Mode:Monitor" in line:
+                iface = line.split()[0]
+                if iface:
+                    return iface
+    except Exception:
+        pass
+    return interface + "mon"
 
 
 @dataclass
@@ -30,7 +45,7 @@ class AccessPoint:
 class WifiScanner:
     def __init__(self, interface: str = "wlan0"):
         self.interface = interface
-        self.monitor_iface = interface + "mon"
+        self.monitor_iface = _detect_monitor_iface(interface)
         self._runner = CommandRunner()
 
     async def enable_monitor(self) -> AsyncGenerator[str, None]:
@@ -38,6 +53,7 @@ class WifiScanner:
         runner = CommandRunner()
         async for line in runner.run(["airmon-ng", "start", self.interface]):
             yield line
+        self.monitor_iface = _detect_monitor_iface(self.interface)
         yield f"[+] Monitor interface: {self.monitor_iface}"
 
     async def disable_monitor(self) -> AsyncGenerator[str, None]:

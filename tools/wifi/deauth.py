@@ -19,7 +19,7 @@ DANGER = DangerLevel.RED
 
 
 class DeauthFlood:
-    def __init__(self, interface: str = "wlan0mon"):
+    def __init__(self, interface: str = "wlan0"):
         self.interface = interface
         self._runner = CommandRunner()
 

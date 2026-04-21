@@ -17,7 +17,7 @@ DANGER = DangerLevel.ORANGE
 
 
 class HandshakeCapture:
-    def __init__(self, interface: str = "wlan0mon", output_dir: str = "/tmp"):
+    def __init__(self, interface: str = "wlan0", output_dir: str = "/tmp"):
         self.interface = interface
         self.output_dir = output_dir
         self._capture_runner = CommandRunner()
