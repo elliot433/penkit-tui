@@ -711,9 +711,9 @@ def main_page():
         def start_classic():
             ui.notify('Starte classic_menu.py im Terminal: python3 classic_menu.py', type='info', timeout=5000)
 
-        ui.element('div').classes('cat-item').on('click', start_classic).style('margin-top:auto') \
-            .add(ui.icon('terminal').style('color:#64748b;font-size:18px')) \
-            .add(ui.label('Classic TUI').style('color:#64748b;font-size:13px'))
+        with ui.element('div').classes('cat-item').on('click', start_classic).style('margin-top:auto'):
+            ui.icon('terminal').style('color:#64748b;font-size:18px')
+            ui.label('Classic TUI').style('color:#64748b;font-size:13px')
 
     # ── Main content ──────────────────────────────────────────────────────────
     with ui.column().classes('w-full').style('padding: 24px; gap: 0'):
