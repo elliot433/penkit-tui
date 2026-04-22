@@ -2467,6 +2467,14 @@ async def menu_c2():
 
         from core.telegram_setup import load_telegram_config
         token, chat_id = load_telegram_config()
+        if not token or not chat_id:
+            try:
+                from tools.c2.telegram_bot import load_config as _tg_load
+                _saved = _tg_load()
+                if _saved:
+                    token, chat_id = _saved
+            except Exception:
+                pass
         if token and chat_id:
             print(f"  {G}[*] Telegram Config gefunden — Agent wird eingebaut{R}")
         else:

