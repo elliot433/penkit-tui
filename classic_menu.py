@@ -1900,6 +1900,7 @@ async def menu_c2():
     menu_item(" 7", "📱  Telegram C2 Agent generieren",   "⛔", "PS1 das Befehle via Telegram empfängt + ausführt")
     menu_item(" 8", "🤖  Telegram Bot Setup",             "🔴", "Bot-Token verifizieren + Chat-ID herausfinden")
     menu_item(" 9", "🎣  Reverse Shell Listener",         "🔴", "Empfängt eingehende Shells (pwncat/nc/msf/socat)")
+    menu_item(" W", "👁️   C2 Watcher (Offline-Detektor)", "🔴", "Antwortet 'Agent offline' wenn der Bot angeschrieben wird")
     menu_item(" E", "🔮  Advanced Evasion Builder",       "⛔", "DLL Unhooking + Direct Syscalls + Sleep Obfuscation")
     menu_item(" D", "🌐  DNS C2 Tunneling",               "⛔", "C2 über DNS Port 53 — bypassed jede Firewall")
     menu_item(" S", "🔐  HTTPS Shell (Port 443)",         "⛔", "Sieht aus wie HTTPS — bypassed Firewalls + IDS")
@@ -2199,6 +2200,8 @@ async def menu_c2():
             out_path = f"/tmp/penkit_agent_{chat_id}.ps1"
             with open(out_path, "w") as f:
                 f.write(ps1_code)
+            from tools.c2.c2_watcher import mark_agent_generated
+            mark_agent_generated()
             print(f"  {G}[+] Agent gespeichert: {out_path}{R}")
             print(f"  {G}[+] Größe: {len(ps1_code)} Zeichen{R}")
             print()
@@ -2325,6 +2328,49 @@ async def menu_c2():
         elif ltype == "4":
             await run_tool_live(SocatTLSListener(lport).listen())
 
+        wait_key()
+
+    elif choice in ("w", "W"):
+        banner()
+        section("👁️  C2 WATCHER — OFFLINE-DETEKTOR", "Antwortet automatisch wenn Agent nicht verbunden ist")
+        info_box([
+            "Der Watcher läuft auf Kali und überwacht den Telegram-Bot.",
+            "Wenn der Operator dem Bot schreibt und kein Agent antwortet:",
+            "  → Watcher sendet sofort eine 'Agent offline' Nachricht zurück",
+            "",
+            "Wann starten?",
+            "  → Nachdem du den Agent generiert hast (Option 7)",
+            "  → Wenn du nicht weißt ob das Ziel noch verbunden ist",
+            "  → Als permanenter Fallback im Hintergrund",
+            "",
+            "Wichtig: Läuft ZUSAMMEN mit dem Agent — kein Konflikt.",
+            "  Wenn Agent aktiv ist: Agent antwortet zuerst, Watcher bleibt ruhig.",
+            "  Wenn Agent offline: Watcher greift ein.",
+        ])
+        print()
+
+        from core.telegram_setup import load_telegram_config
+        token, chat_id = load_telegram_config()
+
+        if not token or not chat_id:
+            print(f"  {Y}[!] Kein Telegram-Config gefunden.{R}")
+            print(f"  {DIM}Erst Option 8 (Bot Setup) ausführen.{R}")
+            wait_key()
+            return
+
+        print(f"  {G}[*] Bot-Token: ...{token[-8:]}  Chat-ID: {chat_id}{R}")
+        print(f"  {DIM}Ctrl+C zum Stoppen{R}\n")
+        input(f"  {Y}Enter drücken um Watcher zu starten...{R}")
+        print()
+
+        try:
+            from tools.c2.c2_watcher import C2Watcher
+            watcher = C2Watcher(token, chat_id)
+            await run_tool_live(watcher.start())
+        except KeyboardInterrupt:
+            print(f"\n  {Y}[*] Watcher gestoppt.{R}")
+        except Exception as e:
+            print(f"  {RD}[!] {e}{R}")
         wait_key()
 
     elif choice in ("e", "E"):
