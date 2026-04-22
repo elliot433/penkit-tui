@@ -349,7 +349,7 @@ class WiFiAutoCombo:
             yield "    oder Signal des Fake-APs war schwächer."
 
 
-async def _verify_wifi_password(ssid: str, bssid: str, password: str, iface: str) -> AsyncGenerator[str, None]:
+async def _verify_wifi_password(ssid: str, bssid: str, password: str, iface: str) -> bool:
     """Testet ob erbeutetes Passwort wirklich stimmt."""
     conf_path = "/tmp/penkit_verify.conf"
     with open(conf_path, "w") as f:

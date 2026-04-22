@@ -337,4 +337,3 @@ class BeaconFlood:
     async def stop(self):
         if self._proc and self._proc.returncode is None:
             self._proc.terminate()
-            yield "[*] Beacon Flood gestoppt."

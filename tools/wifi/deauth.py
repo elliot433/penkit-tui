@@ -46,4 +46,3 @@ class DeauthFlood:
 
     async def stop(self):
         await self._runner.stop()
-        yield "[*] Deauth stopped"
