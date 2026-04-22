@@ -34,8 +34,22 @@ def load() -> dict:
 
 def save(cfg: dict):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(cfg, f, indent=2)
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(cfg, f, indent=2)
+    except PermissionError:
+        # Config-Datei gehört anderem User (z.B. nach sudo-Run) — Rechte fixen
+        try:
+            os.chmod(CONFIG_DIR, 0o755)
+            if CONFIG_FILE.exists():
+                os.chmod(CONFIG_FILE, 0o644)
+            with open(CONFIG_FILE, "w") as f:
+                json.dump(cfg, f, indent=2)
+        except PermissionError:
+            # Letzter Ausweg: im Projektverzeichnis speichern
+            fallback = Path(__file__).parent.parent / "penkit_config.json"
+            with open(fallback, "w") as f:
+                json.dump(cfg, f, indent=2)
 
 
 def ensure_output_dir(cfg: dict):
