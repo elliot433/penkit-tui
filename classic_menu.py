@@ -4,11 +4,13 @@ PenKit Classic Menu — terminal-native numbered interface.
 No dependencies beyond Python stdlib + tool modules.
 """
 
+import json
 import os
 import sys
 import asyncio
 import time
 import random
+import urllib.request
 
 # ── ANSI colours ──────────────────────────────────────────────────────────────
 R  = "\033[0m"          # reset
@@ -44,7 +46,7 @@ def banner():
 {DG}  ╚═╝     ╚══════╝╚═╝  ╚══╝╚═╝  ╚═╝╚═╝   ╚═╝{R}
 {DIM}  ┌────────────────────────────────────────────────────────┐{R}
 {DIM}  │  {R}{C}Authorized Pentesting Toolkit  v3.0{R}{DIM}                    │{R}
-{DIM}  │  {R}{DG}? = KI  |  H = Health  |  F = ATT&CK  |  U = Update{R}{DIM}         │{R}
+{DIM}  │  {R}{DG}? = KI  |  S = Setup  |  F = ATT&CK  |  U = Update{R}{DIM}         │{R}
 {DIM}  └────────────────────────────────────────────────────────┘{R}
 """
     print(art)
@@ -3823,6 +3825,355 @@ async def menu_output():
     wait_key()
 
 
+async def menu_setup():
+    """Einmal-Setup Wizard: Telegram Bot, Ollama, Basis-Konfiguration."""
+    while True:
+        banner()
+        section("⚙️   SETUP & KONFIGURATION", "Telegram Bot · Ollama KI · Interface · API-Keys")
+
+        # Aktuellen Status zeigen
+        from core.telegram_setup import load_telegram_config
+        from core.config import load as _cfg_load
+        tg_token, tg_chat_id = load_telegram_config()
+        cfg = _cfg_load()
+
+        import shutil as _sh
+        ollama_ok  = bool(_sh.which("ollama"))
+        tg_ok      = bool(tg_token and tg_chat_id)
+        iface_set  = cfg.get("interface", "wlan0")
+
+        print(f"  {DIM}{'─'*68}{R}")
+        print(f"  Telegram Bot:   {'  ' + G + '✓ konfiguriert' + R + DIM + '  (' + tg_chat_id[:8] + '...)' + R if tg_ok else RD + '  ✗ nicht eingerichtet' + R}")
+        print(f"  Ollama (KI):    {'  ' + G + '✓ installiert' + R if ollama_ok else RD + '  ✗ nicht installiert' + R}")
+        print(f"  WiFi Interface: {G}  {iface_set}{R}")
+        print(f"  {DIM}{'─'*68}{R}\n")
+
+        menu_item(" 1", "📱  Telegram Bot einrichten",      "🟢", "Token + Chat-ID automatisch ermitteln + testen")
+        menu_item(" 2", "🧠  Ollama KI einrichten",         "🟢", "Installieren, Modell laden, AI Terminal testen")
+        menu_item(" 3", "📡  WiFi Interface setzen",        "🟢", f"Aktuell: {iface_set}")
+        menu_item(" 4", "📁  Output-Verzeichnis ändern",    "🟢", f"Aktuell: {cfg.get('output_dir','~/penkit-output')}")
+        menu_item(" 5", "🔑  API-Keys (Claude / OpenAI)",   "🟢", "Für AI Terminal mit Cloud-Backend")
+        menu_item(" 0", "← Zurück", "")
+        print()
+
+        choice = prompt("setup")
+
+        if choice == "0":
+            return
+
+        # ── 1: Telegram Setup ─────────────────────────────────────────────────
+        elif choice == "1":
+            banner()
+            section("📱  TELEGRAM BOT EINRICHTEN", "Schritt-für-Schritt Wizard")
+            info_box([
+                "Ein Telegram-Bot ist die Fernbedienung für PenKit auf deinem Handy.",
+                "",
+                "Was er kann:",
+                "  → Phishing-Alert: sofort Nachricht wenn Opfer Passwort eingibt",
+                "  → Post-Exploit: Keylogger, Screenshots, WiFi-Passwörter → Telegram",
+                "  → C2 Agent: Remote-Befehle auf kompromittiertem Windows-PC",
+                "  → Evil Twin: Gefangene Passwörter direkt aufs Handy",
+                "",
+                "Kosten: kostenlos. Einrichten dauert 2 Minuten.",
+            ])
+            print()
+            print(f"  {C}{B}Schritt 1: Bot erstellen{R}")
+            print(f"  {W}1.{R} Öffne Telegram auf deinem Handy oder PC")
+            print(f"  {W}2.{R} Suche nach:  {G}@BotFather{R}")
+            print(f"  {W}3.{R} Schreibe:    {G}/newbot{R}")
+            print(f"  {W}4.{R} Wähle einen Namen (z.B. 'Mein PenKit Bot')")
+            print(f"  {W}5.{R} Wähle einen Username (muss auf {G}bot{R} enden, z.B. {G}meinpenkit_bot{R})")
+            print(f"  {W}6.{R} Kopiere den {Y}Token{R} (sieht aus wie: {DIM}1234567890:ABCdefGHI...{R})")
+            print()
+            token = ask("Token von @BotFather einfügen", required=True)
+            if not token:
+                wait_key(); continue
+
+            from core.telegram_setup import (
+                validate_token, get_bot_info, get_updates, send_message, save_telegram_config,
+            )
+
+            if not validate_token(token):
+                print(f"  {RD}[!] Token-Format ungültig. Erwartet: 123456789:ABCdefGHI...{R}")
+                wait_key(); continue
+
+            print(f"\n  {DIM}[*] Prüfe Token bei Telegram API...{R}")
+            bot_info = get_bot_info(token)
+            if not bot_info:
+                print(f"  {RD}[!] Token ungültig oder kein Internet.{R}")
+                wait_key(); continue
+
+            print(f"  {G}[✓] Bot gefunden: @{bot_info.get('username')} ({bot_info.get('first_name')}){R}")
+            print()
+            print(f"  {C}{B}Schritt 2: Chat-ID ermitteln{R}")
+            print(f"  {W}1.{R} Suche auf Telegram nach:  {G}@{bot_info.get('username')}{R}")
+            print(f"  {W}2.{R} Öffne den Chat mit dem Bot")
+            print(f"  {W}3.{R} Schreibe irgendetwas an den Bot (z.B. 'hallo')")
+            print()
+            ask(f"Enter drücken sobald du dem Bot geschrieben hast...", "")
+
+            print(f"  {DIM}[*] Suche Chat-ID...{R}")
+            updates = get_updates(token)
+            if not updates:
+                print(f"  {Y}[!] Keine Nachricht empfangen. Warte 5s und versuche nochmal...{R}")
+                import time as _time; _time.sleep(5)
+                updates = get_updates(token)
+
+            if not updates:
+                print(f"  {RD}[!] Immer noch keine Nachricht. Prüfe ob du dem Bot wirklich geschrieben hast.{R}")
+                print(f"  {DIM}Alternativ: Chat-ID manuell eingeben (suche @userinfobot auf Telegram){R}")
+                chat_id = ask("Chat-ID manuell eingeben", "")
+            else:
+                msg = updates[-1]
+                chat_id = str(msg.get("message", {}).get("chat", {}).get("id", ""))
+                sender  = msg.get("message", {}).get("from", {}).get("first_name", "?")
+                print(f"  {G}[✓] Chat-ID gefunden: {chat_id}  (von: {sender}){R}")
+
+            if not chat_id:
+                print(f"  {RD}[!] Keine Chat-ID. Abgebrochen.{R}")
+                wait_key(); continue
+
+            print(f"\n  {DIM}[*] Sende Test-Nachricht...{R}")
+            test_text = (
+                "🟢 <b>PenKit verbunden!</b>\n\n"
+                "Dein Telegram-Bot ist jetzt aktiv.\n"
+                "Du erhältst ab sofort Alerts von:\n"
+                "  🎣 Phishing (neue Credentials)\n"
+                "  💀 Post-Exploit Exfil\n"
+                "  🤖 C2 Agent Commands\n\n"
+                "<i>PenKit TUI v3</i>"
+            )
+            if send_message(token, chat_id, test_text):
+                print(f"  {G}[✓] Test-Nachricht erfolgreich! Schau auf dein Handy.{R}")
+            else:
+                print(f"  {Y}[!] Test-Nachricht fehlgeschlagen — aber Token + Chat-ID werden trotzdem gespeichert.{R}")
+
+            save_telegram_config(token, chat_id)
+            print(f"\n  {G}[✓] Telegram-Bot konfiguriert und gespeichert!{R}")
+            print(f"  {DIM}Token:   {token[:12]}...{R}")
+            print(f"  {DIM}Chat-ID: {chat_id}{R}")
+            wait_key()
+
+        # ── 2: Ollama Setup ───────────────────────────────────────────────────
+        elif choice == "2":
+            banner()
+            section("🧠  OLLAMA KI EINRICHTEN", "Lokale KI für AI Attack Terminal")
+            info_box([
+                "Ollama läuft lokal auf deiner Kali-Maschine — kein API-Key, keine Kosten.",
+                "Das AI Attack Terminal (A-Taste) nutzt Ollama um Angriffe vorzuschlagen.",
+                "",
+                "Empfohlene Modelle:",
+                "  llama3.2   — 4 GB, beste Pentest-Qualität   ✅ Empfohlen",
+                "  mistral    — 4 GB, gute Alternative",
+                "  codellama  — 4 GB, speziell für Shell-Befehle",
+                "  gemma2     — 5 GB, schnell",
+                "",
+                "Braucht: ~4-8 GB RAM + ~4-8 GB Speicherplatz",
+            ])
+            print()
+
+            import shutil as _sh2, subprocess as _sp2
+            if _sh2.which("ollama"):
+                print(f"  {G}[✓] Ollama bereits installiert:{R}  {_sh2.which('ollama')}")
+            else:
+                print(f"  {Y}[!] Ollama nicht installiert.{R}")
+                print(f"\n  {C}Installationsbefehl:{R}")
+                print(f"  {W}  curl -fsSL https://ollama.com/install.sh | sh{R}")
+                print()
+                print(f"  {DIM}Führe den Befehl in einem anderen Terminal aus, dann hier Enter drücken.{R}")
+                ask("Enter wenn Installation abgeschlossen...", "")
+
+                if not _sh2.which("ollama"):
+                    print(f"  {RD}[!] Ollama immer noch nicht gefunden. Bitte manuell installieren.{R}")
+                    wait_key(); continue
+                print(f"  {G}[✓] Ollama installiert!{R}")
+
+            # Service-Check
+            print(f"\n  {DIM}[*] Prüfe ob Ollama-Dienst läuft...{R}")
+            try:
+                r = _sp2.run(["ollama", "list"], capture_output=True, text=True, timeout=8)
+                service_ok = r.returncode == 0
+            except Exception:
+                service_ok = False
+
+            if not service_ok:
+                print(f"  {Y}[!] Ollama-Dienst nicht aktiv.{R}")
+                print(f"  {C}Starte mit:{R}  {W}ollama serve &{R}")
+                print(f"  {DIM}Warte 5 Sekunden und versuche nochmal...{R}")
+                import time as _t2; _t2.sleep(5)
+                try:
+                    r2 = _sp2.run(["ollama", "list"], capture_output=True, text=True, timeout=8)
+                    service_ok = r2.returncode == 0
+                except Exception:
+                    pass
+
+            # Modelle auflisten
+            models = []
+            if service_ok:
+                try:
+                    lines = r.stdout.strip().split("\n")[1:] if service_ok else []
+                    models = [l.split()[0] for l in lines if l.strip()]
+                except Exception:
+                    pass
+
+            if models:
+                print(f"\n  {G}[✓] Installierte Modelle:{R}")
+                for i, m in enumerate(models, 1):
+                    star = f"  {DIM}← aktuell gewählt{R}" if m == cfg.get("ollama_model") else ""
+                    print(f"    {DIM}[{i}]{R}  {G}{m}{R}{star}")
+                print(f"    {DIM}[N]{R}  Neues Modell laden")
+            else:
+                print(f"\n  {Y}[!] Kein Modell installiert.{R}")
+                print(f"  {DIM}Empfehlung:{R}  {W}ollama pull llama3.2{R}")
+
+            print()
+            MODELS_AVAILABLE = ["llama3.2", "mistral", "codellama", "gemma2", "qwen2.5", "phi3"]
+            choice2 = ask("Modell-Nummer wählen oder 'N' für neues Modell", "1" if models else "N")
+
+            pull_model = ""
+            if choice2.upper() == "N" or not models:
+                print(f"\n  {C}Verfügbare Modelle:{R}")
+                for i, m in enumerate(MODELS_AVAILABLE, 1):
+                    note = "  ✅ Empfohlen" if m == "llama3.2" else ""
+                    print(f"    {DIM}[{i}]{R}  {m}{note}")
+                m_choice = ask("Modell-Nummer oder Name", "1")
+                try:
+                    pull_model = MODELS_AVAILABLE[int(m_choice) - 1]
+                except (ValueError, IndexError):
+                    pull_model = m_choice if m_choice else "llama3.2"
+
+                print(f"\n  {G}[*] Lade {pull_model}...{R}")
+                print(f"  {DIM}(kann je nach Internet/Größe 5-30 Min dauern){R}\n")
+                pull_proc = await asyncio.create_subprocess_exec(
+                    "ollama", "pull", pull_model,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                async for data in pull_proc.stdout:
+                    line = data.decode(errors="replace").rstrip()
+                    if line:
+                        print(f"  {DIM}{line}{R}")
+                await pull_proc.wait()
+                if pull_proc.returncode == 0:
+                    print(f"\n  {G}[✓] {pull_model} erfolgreich geladen!{R}")
+                    selected_model = pull_model
+                else:
+                    print(f"\n  {RD}[!] Fehler beim Laden. Manuell versuchen: ollama pull {pull_model}{R}")
+                    wait_key(); continue
+            else:
+                try:
+                    selected_model = models[int(choice2) - 1]
+                except (ValueError, IndexError):
+                    selected_model = models[0] if models else "llama3.2"
+
+            # Modell in config speichern
+            from core.config import save as _cfg_save2
+            cfg["ollama_model"] = selected_model
+            _cfg_save2(cfg)
+            print(f"\n  {G}[✓] Standardmodell gesetzt: {selected_model}{R}")
+
+            # Schneller Funktionstest
+            print(f"\n  {DIM}[*] Teste Modell mit einer kurzen Frage...{R}")
+            try:
+                import json as _js, urllib.request as _ur
+                payload = json.dumps({
+                    "model": selected_model,
+                    "messages": [{"role": "user", "content": "Reply with exactly: PENKIT_OK"}],
+                    "stream": False,
+                    "options": {"num_predict": 10},
+                }).encode()
+                req = urllib.request.Request(
+                    "http://localhost:11434/api/chat",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = json.loads(resp.read())
+                    reply = data.get("message", {}).get("content", "")
+                    if reply:
+                        print(f"  {G}[✓] Modell antwortet korrekt!{R}  {DIM}(Antwort: {reply[:40]}){R}")
+                    else:
+                        print(f"  {Y}[~] Modell geladen, aber leere Antwort.{R}")
+            except Exception as e:
+                print(f"  {Y}[~] Test fehlgeschlagen ({e}) — Modell aber gespeichert.{R}")
+
+            print(f"\n  {G}[✓] Ollama eingerichtet! AI Terminal (A-Taste) ist jetzt bereit.{R}")
+            wait_key()
+
+        # ── 3: WiFi Interface ─────────────────────────────────────────────────
+        elif choice == "3":
+            banner()
+            section("📡  WIFI INTERFACE SETZEN", "")
+            import subprocess as _sp3
+            try:
+                result = _sp3.run(["iwconfig"], capture_output=True, text=True, timeout=5)
+                interfaces = [l.split()[0] for l in result.stdout.split("\n") if l and not l.startswith(" ")]
+                if interfaces:
+                    print(f"  {G}Gefundene Interfaces:{R}")
+                    for ifc in interfaces:
+                        print(f"    {C}{ifc}{R}")
+                    print()
+            except Exception:
+                pass
+
+            info_box([
+                "ALFA AWUS036ACH: bleibt als 'wlan0' in Monitor-Mode (rtw88 Treiber)",
+                "Standard: wlan0 (Monitor Mode: wlan0mon)",
+                "Bei anderen Adaptern: wlan1, wlan2 etc.",
+            ])
+            new_iface = ask("Interface-Name", cfg.get("interface", "wlan0"))
+            if new_iface:
+                cfg["interface"] = new_iface
+                cfg["monitor_interface"] = new_iface + "mon"
+                from core.config import save as _cfg_sv
+                _cfg_sv(cfg)
+                print(f"  {G}[✓] Interface: {new_iface}  |  Monitor: {new_iface}mon{R}")
+            wait_key()
+
+        # ── 4: Output-Verzeichnis ─────────────────────────────────────────────
+        elif choice == "4":
+            banner()
+            section("📁  OUTPUT-VERZEICHNIS", "")
+            current = cfg.get("output_dir", "~/penkit-output")
+            print(f"  {DIM}Aktuell: {current}{R}\n")
+            new_dir = ask("Neues Verzeichnis (Enter = unverändert)", current)
+            if new_dir and new_dir != current:
+                import os as _os
+                expanded = _os.path.expanduser(new_dir)
+                _os.makedirs(expanded, exist_ok=True)
+                cfg["output_dir"] = new_dir
+                from core.config import save as _cfg_sv2
+                _cfg_sv2(cfg)
+                print(f"  {G}[✓] Output-Verzeichnis gesetzt: {new_dir}{R}")
+            wait_key()
+
+        # ── 5: API-Keys ───────────────────────────────────────────────────────
+        elif choice == "5":
+            banner()
+            section("🔑  API-KEYS", "Claude / OpenAI für AI Terminal")
+            info_box([
+                "Optional — Ollama ist kostenlos und braucht keinen API-Key.",
+                "Claude API: beste Pentest-Qualität — https://console.anthropic.com",
+                "OpenAI GPT: Alternative — https://platform.openai.com",
+            ])
+            from tools.ai_terminal import load_keys, save_keys
+            keys = load_keys()
+            print()
+            print(f"  {C}Claude API-Key:{R}  {DIM}{('●' * 8 + '...' if keys.get('claude') else 'nicht gesetzt')}{R}")
+            print(f"  {C}OpenAI API-Key:{R}  {DIM}{('●' * 8 + '...' if keys.get('openai') else 'nicht gesetzt')}{R}")
+            print()
+            claude_key = ask("Claude API-Key (Enter = unverändert)", "")
+            openai_key = ask("OpenAI API-Key  (Enter = unverändert)", "")
+            if claude_key:
+                keys["claude"] = claude_key
+            if openai_key:
+                keys["openai"] = openai_key
+            if claude_key or openai_key:
+                save_keys(keys)
+                print(f"  {G}[✓] API-Keys gespeichert{R}")
+            wait_key()
+
+
 async def menu_mitre():
     """MITRE ATT&CK Mapping aller PenKit-Tools."""
     from tools.mitre_attack import show_mitre_map
@@ -4850,6 +5201,7 @@ async def main_menu():
         menu_item(" R", "📊  HTML Report",            "🟢", "Alle Scan-Ergebnisse → professioneller HTML-Report")
         menu_item(" O", "📁  Output-Verzeichnis",     "🟢", "Zeigt ~/penkit-output/ — alle gespeicherten Dateien")
         menu_item(" U", "🔄  Update PenKit",          "🟢", "git pull — neueste Version aus GitHub laden")
+        menu_item(" S", "⚙️   Setup & Config",         "🟢", "Telegram Bot, Ollama, Interface, API-Keys")
         print(f"  {DIM}└{'─'*66}┘{R}")
         print()
         menu_item(" 0", "❌  Exit", "")
@@ -4884,6 +5236,7 @@ async def main_menu():
             "n": menu_anon,  "N": menu_anon,
             "f": menu_mitre, "F": menu_mitre,
             "u": menu_update,"U": menu_update,
+            "s": menu_setup, "S": menu_setup,
         }
 
         if choice == "0":

@@ -230,6 +230,71 @@ async def generate_report(title: str = "PenKit Pentest Report") -> AsyncGenerato
         ]
         sections_html.append(_section("Generierte Payloads", "💀", f'<ul class="timeline">{"".join(items)}</ul>', stats["payloads"]))
 
+    # ── MITRE ATT&CK Coverage ─────────────────────────────────────────────
+    # Erkennt automatisch welche Techniken basierend auf Output-Dateien genutzt wurden
+    _ATTCK_BY_EVIDENCE: list[tuple[str, str, str, str, str]] = [
+        # (file_glob, dir_key, tactic, technique_id, technique_name)
+        ("*.cap",          "wifi",     "Credential Access",   "T1040",      "Network Sniffing (WPA2 Handshake)"),
+        ("*.hc22000",      "wifi",     "Credential Access",   "T1040",      "Network Sniffing (PMKID)"),
+        ("*.cap",          "wifi",     "Impact",              "T1498",      "Network DoS (Deauth Flood)"),
+        ("autoscan_*.txt", "network",  "Discovery",           "T1046",      "Network Service Scanning (Nmap)"),
+        ("exploits_*.json","network",  "Initial Access",      "T1190",      "Exploit Public-Facing Application"),
+        ("topology_*.txt", "network",  "Discovery",           "T1018",      "Remote System Discovery"),
+        ("*.json",         "passwords","Credential Access",   "T1110.002",  "Password Cracking (Hashcat/John)"),
+        ("hydra_*.txt",    "passwords","Credential Access",   "T1110.001",  "Brute Force (Hydra)"),
+        ("recon_*.txt",    "osint",    "Reconnaissance",      "T1589",      "Gather Victim Identity Information"),
+        ("shodan_*.json",  "osint",    "Reconnaissance",      "T1596",      "Search Open Technical Databases"),
+        ("*.json",         "osint",    "Reconnaissance",      "T1591",      "Gather Victim Org Information"),
+        ("*.ps1",          "payloads", "Execution",           "T1059.001",  "PowerShell"),
+        ("*.exe",          "payloads", "Defense Evasion",     "T1036.005",  "Masquerading (Disguised EXE)"),
+        ("*.ps1",          "payloads", "Defense Evasion",     "T1562.001",  "Impair Defenses: AMSI Bypass"),
+        ("*shellcode*",    "payloads", "Execution",           "T1055.012",  "Process Hollowing"),
+    ]
+    # Phishing creds kommen aus /tmp (außerhalb von DIRS)
+    phish_cred_file = Path("/tmp/penkit_phish_creds.json")
+    attck_rows = []
+    seen_techniques: set[str] = set()
+
+    for glob_pat, dir_key, tactic, tid, tname in _ATTCK_BY_EVIDENCE:
+        dir_path = DIRS.get(dir_key)
+        if dir_path and list(dir_path.glob(glob_pat)):
+            if tid not in seen_techniques:
+                seen_techniques.add(tid)
+                color = ("red" if "Initial Access" in tactic or "Credential" in tactic
+                         else "orange" if "Execution" in tactic or "Impact" in tactic
+                         else "yellow" if "Defense" in tactic or "Lateral" in tactic
+                         else "blue")
+                attck_rows.append(
+                    f'<tr><td><span class="badge badge-{color}">{tid}</span></td>'
+                    f'<td>{tname}</td>'
+                    f'<td><span class="tag">{tactic}</span></td></tr>'
+                )
+
+    if phish_cred_file.exists():
+        for tid, tname, tactic, color in [
+            ("T1566",     "Phishing — Credential Harvest",          "Initial Access",    "red"),
+            ("T1566.002", "Spearphishing Link / 2FA Bypass",        "Initial Access",    "red"),
+        ]:
+            if tid not in seen_techniques:
+                seen_techniques.add(tid)
+                attck_rows.append(
+                    f'<tr><td><span class="badge badge-{color}">{tid}</span></td>'
+                    f'<td>{tname}</td>'
+                    f'<td><span class="tag">{tactic}</span></td></tr>'
+                )
+
+    if attck_rows:
+        attck_table = (
+            '<table>'
+            '<tr><th>Technique ID</th><th>Technique Name</th><th>Tactic</th></tr>'
+            + "".join(attck_rows)
+            + '</table>'
+            + '<p style="margin-top:12px;font-size:12px;color:#555">'
+            + 'Referenz: <a href="https://attack.mitre.org/" style="color:#4fc3f7">attack.mitre.org</a></p>'
+        )
+        sections_html.append(_section("MITRE ATT&CK — nachgewiesene Techniken", "🗂️", attck_table, len(attck_rows)))
+        yield f"  ATT&CK Techniken: {len(attck_rows)}"
+
     # ── Alle Dateien Übersicht ─────────────────────────────────────────────
     all_files = []
     for cat, path in DIRS.items():
