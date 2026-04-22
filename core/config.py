@@ -21,35 +21,29 @@ DEFAULTS = {
 
 
 def load() -> dict:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    if CONFIG_FILE.exists():
-        try:
-            with open(CONFIG_FILE) as f:
-                data = json.load(f)
-            return {**DEFAULTS, **data}
-        except Exception:
-            pass
+    for candidate in [CONFIG_FILE, _FALLBACK_FILE]:
+        if candidate.exists():
+            try:
+                with open(candidate) as f:
+                    data = json.load(f)
+                return {**DEFAULTS, **data}
+            except Exception:
+                continue
     return DEFAULTS.copy()
 
 
+_FALLBACK_FILE = Path(__file__).parent.parent / "penkit_config.json"
+
+
 def save(cfg: dict):
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(cfg, f, indent=2)
-    except PermissionError:
-        # Config-Datei gehört anderem User (z.B. nach sudo-Run) — Rechte fixen
+    for attempt in [CONFIG_FILE, _FALLBACK_FILE]:
         try:
-            os.chmod(CONFIG_DIR, 0o755)
-            if CONFIG_FILE.exists():
-                os.chmod(CONFIG_FILE, 0o644)
-            with open(CONFIG_FILE, "w") as f:
+            attempt.parent.mkdir(parents=True, exist_ok=True)
+            with open(attempt, "w") as f:
                 json.dump(cfg, f, indent=2)
-        except PermissionError:
-            # Letzter Ausweg: im Projektverzeichnis speichern
-            fallback = Path(__file__).parent.parent / "penkit_config.json"
-            with open(fallback, "w") as f:
-                json.dump(cfg, f, indent=2)
+            return
+        except Exception:
+            continue
 
 
 def ensure_output_dir(cfg: dict):

