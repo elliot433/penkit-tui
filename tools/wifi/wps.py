@@ -33,7 +33,7 @@ class WPSScanner:
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                "wash", "-i", self.iface, "--scan", "-o",
+                "wash", "-i", self.iface,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

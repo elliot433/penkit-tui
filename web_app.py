@@ -347,6 +347,251 @@ CATEGORIES = [
         ],
     },
     {
+        "id": "mitm", "label": "MITM Attacks", "icon": "sync_alt", "color": "#f43f5e",
+        "tools": [
+            {
+                "id": "arp_spoof", "name": "ARP Spoof", "icon": "swap_horiz",
+                "badge": "🔴", "desc": "Netzwerkverkehr durch Kali umleiten (Bettercap)",
+                "inputs": [
+                    {"id": "iface",  "label": "Interface",              "type": "text", "default": "eth0"},
+                    {"id": "target", "label": "Ziel-IP (leer = Subnet)", "type": "text", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.mitm', 'BettercapEngine', v["iface"], "/tmp"),
+            },
+            {
+                "id": "ssl_strip", "name": "SSL Strip", "icon": "lock_open",
+                "badge": "🔴", "desc": "HTTPS → HTTP Downgrade — Passwörter im Klartext",
+                "inputs": [
+                    {"id": "iface",  "label": "Interface", "type": "text", "default": "eth0"},
+                    {"id": "target", "label": "Ziel-IP",   "type": "text", "default": ""},
+                ],
+                "run": lambda v: _mitm_bettercap(v, "ssl_strip"),
+            },
+            {
+                "id": "dns_poison", "name": "DNS Poison", "icon": "dns",
+                "badge": "🔴", "desc": "Domains auf eigene IP umleiten (Bettercap)",
+                "inputs": [
+                    {"id": "iface",    "label": "Interface",        "type": "text", "default": "eth0"},
+                    {"id": "target",   "label": "Ziel-IP",          "type": "text", "default": ""},
+                    {"id": "domains",  "label": "Domains",          "type": "text", "default": "*.google.com"},
+                    {"id": "redirect", "label": "Redirect-IP",      "type": "text", "default": ""},
+                ],
+                "run": lambda v: _mitm_bettercap(v, "dns_poison"),
+            },
+            {
+                "id": "cred_harvest", "name": "Credential Harvester", "icon": "phishing",
+                "badge": "🔴", "desc": "Live: alle Passwörter im Netzwerkverkehr mitschneiden",
+                "inputs": [
+                    {"id": "iface",  "label": "Interface", "type": "text", "default": "eth0"},
+                    {"id": "target", "label": "Ziel-IP",   "type": "text", "default": ""},
+                ],
+                "run": lambda v: _mitm_bettercap(v, "harvest_creds"),
+            },
+            {
+                "id": "responder", "name": "Responder (NTLM)", "icon": "key",
+                "badge": "🔴", "desc": "LLMNR/NBT-NS Poisoning → NTLMv2 Hashes fangen",
+                "inputs": [
+                    {"id": "iface", "label": "Interface", "type": "text", "default": "eth0"},
+                ],
+                "run": lambda v: _import_run('tools.mitm', 'ResponderEngine', v["iface"]),
+            },
+            {
+                "id": "mitm6", "name": "mitm6 (IPv6 → Admin)", "icon": "router",
+                "badge": "⛔", "desc": "IPv6 DHCP Spoof → WPAD → NTLM Relay → SYSTEM / Domain Admin",
+                "inputs": [
+                    {"id": "iface",  "label": "Interface",       "type": "text", "default": "eth0"},
+                    {"id": "domain", "label": "Domain (corp.local)", "type": "text", "default": ""},
+                    {"id": "target", "label": "Relay-Ziel IP",   "type": "text", "default": ""},
+                    {"id": "mode",   "label": "Relay-Modus", "type": "select",
+                     "options": ["http", "smb", "ldap", "socks"], "default": "http"},
+                ],
+                "run": lambda v: _import_run('tools.mitm.mitm6_engine', 'Mitm6Attack',
+                                              v["iface"]),
+            },
+            {
+                "id": "ntlm_relay", "name": "Responder + NTLM Relay", "icon": "share",
+                "badge": "⛔", "desc": "LLMNR Poisoning → NTLM weiterleiten → Shell / Hash",
+                "inputs": [
+                    {"id": "iface",  "label": "Interface",  "type": "text", "default": "eth0"},
+                    {"id": "target", "label": "Relay-Ziel", "type": "text", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.mitm.mitm6_engine', 'ResponderNTLMRelay',
+                                              v["iface"]),
+            },
+        ],
+    },
+    {
+        "id": "ad", "label": "Active Directory", "icon": "domain", "color": "#7c3aed",
+        "tools": [
+            {
+                "id": "smb_enum", "name": "SMB Enumeration", "icon": "folder_shared",
+                "badge": "🔴", "desc": "Shares, Sessions, User, Gruppen, Pass-Policy (NetExec/CME)",
+                "inputs": [
+                    {"id": "target", "label": "Ziel (IP/CIDR)",   "type": "text", "default": ""},
+                    {"id": "domain", "label": "Domain",           "type": "text", "default": ""},
+                    {"id": "user",   "label": "Username",         "type": "text", "default": ""},
+                    {"id": "pw",     "label": "Passwort",         "type": "password", "default": ""},
+                    {"id": "hash",   "label": "NTLM-Hash (alt.)", "type": "text", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.network.ad_suite', 'smb_enum',
+                                              v["target"], v["domain"], v["user"], v["pw"], v["hash"]),
+            },
+            {
+                "id": "pw_spray", "name": "Password Spray", "icon": "water_drop",
+                "badge": "⛔", "desc": "1 Passwort gegen alle User — kein Account-Lockout",
+                "inputs": [
+                    {"id": "target",    "label": "Ziel (IP/CIDR)",    "type": "text", "default": ""},
+                    {"id": "user_file", "label": "User-Liste (Pfad)", "type": "text", "default": ""},
+                    {"id": "password",  "label": "Passwort",          "type": "text", "default": ""},
+                    {"id": "domain",    "label": "Domain",            "type": "text", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.network.ad_suite', 'smb_spray',
+                                              v["target"], v["user_file"], v["password"], v["domain"]),
+            },
+            {
+                "id": "kerberoast", "name": "Kerberoasting", "icon": "confirmation_number",
+                "badge": "⛔", "desc": "Service-Account TGS-Hashes ohne Admin-Rechte → offline cracken",
+                "inputs": [
+                    {"id": "dc_ip",  "label": "DC IP",     "type": "text", "default": ""},
+                    {"id": "domain", "label": "Domain",    "type": "text", "default": ""},
+                    {"id": "user",   "label": "Username",  "type": "text", "default": ""},
+                    {"id": "pw",     "label": "Passwort",  "type": "password", "default": ""},
+                    {"id": "hash",   "label": "NTLM-Hash", "type": "text", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.network.ad_suite', 'kerberoast',
+                                              v["dc_ip"], v["domain"], v["user"], v["pw"], v["hash"]),
+            },
+            {
+                "id": "asrep", "name": "AS-REP Roasting", "icon": "no_accounts",
+                "badge": "⛔", "desc": "Hashes ohne Credentials — Pre-Auth deaktiviert",
+                "inputs": [
+                    {"id": "dc_ip",  "label": "DC IP",     "type": "text", "default": ""},
+                    {"id": "domain", "label": "Domain",    "type": "text", "default": ""},
+                    {"id": "user",   "label": "Username (leer = Enumeration)", "type": "text", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.network.ad_suite', 'asrep_roast',
+                                              v["dc_ip"], v["domain"], v["user"]),
+            },
+            {
+                "id": "secrets_dump", "name": "Secrets Dump", "icon": "lock_open",
+                "badge": "⛔", "desc": "SAM + LSA + NTDS.dit — alle Hashes dumpen (impacket)",
+                "inputs": [
+                    {"id": "target", "label": "Ziel-IP",    "type": "text", "default": ""},
+                    {"id": "domain", "label": "Domain",     "type": "text", "default": ""},
+                    {"id": "user",   "label": "Username",   "type": "text", "default": ""},
+                    {"id": "pw",     "label": "Passwort",   "type": "password", "default": ""},
+                    {"id": "hash",   "label": "NTLM-Hash",  "type": "text", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.network.ad_suite', 'secrets_dump',
+                                              v["target"], v["domain"], v["user"], v["pw"], v["hash"]),
+            },
+            {
+                "id": "bloodhound", "name": "BloodHound Collector", "icon": "account_tree",
+                "badge": "🔴", "desc": "AD-Graph sammeln → Domain Admin Angriffspfade visualisieren",
+                "inputs": [
+                    {"id": "dc_ip",  "label": "DC IP",    "type": "text", "default": ""},
+                    {"id": "domain", "label": "Domain",   "type": "text", "default": ""},
+                    {"id": "user",   "label": "Username", "type": "text", "default": ""},
+                    {"id": "pw",     "label": "Passwort", "type": "password", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.network.ad_suite', 'bloodhound_collect',
+                                              v["dc_ip"], v["domain"], v["user"], v["pw"]),
+            },
+            {
+                "id": "ldap_dump", "name": "LDAP Dump", "icon": "storage",
+                "badge": "🔴", "desc": "Alle User/Gruppen/Computer aus Active Directory auslesen",
+                "inputs": [
+                    {"id": "dc_ip",  "label": "DC IP",    "type": "text", "default": ""},
+                    {"id": "domain", "label": "Domain",   "type": "text", "default": ""},
+                    {"id": "user",   "label": "Username", "type": "text", "default": ""},
+                    {"id": "pw",     "label": "Passwort", "type": "password", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.network.ad_suite', 'ldap_dump',
+                                              v["dc_ip"], v["domain"], v["user"], v["pw"]),
+            },
+            {
+                "id": "dcsync", "name": "DCSync", "icon": "sync",
+                "badge": "⛔", "desc": "Alle Domain-Hashes replizieren — Domain Admin benötigt",
+                "inputs": [
+                    {"id": "dc_ip",  "label": "DC IP",    "type": "text", "default": ""},
+                    {"id": "domain", "label": "Domain",   "type": "text", "default": ""},
+                    {"id": "user",   "label": "Username", "type": "text", "default": ""},
+                    {"id": "pw",     "label": "Passwort", "type": "password", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.network.ad_suite', 'dcsync',
+                                              v["dc_ip"], v["domain"], v["user"], v["pw"]),
+            },
+            {
+                "id": "golden_ticket", "name": "Golden Ticket", "icon": "star",
+                "badge": "⛔", "desc": "krbtgt-Hash → Ticket für jeden Account — dauerhafter Zugriff",
+                "inputs": [
+                    {"id": "domain",   "label": "Domain",      "type": "text", "default": ""},
+                    {"id": "user",     "label": "Target User", "type": "text", "default": "Administrator"},
+                    {"id": "krbtgt",   "label": "krbtgt Hash", "type": "text", "default": ""},
+                    {"id": "domain_sid", "label": "Domain SID","type": "text", "default": ""},
+                ],
+                "run": lambda v: _import_run('tools.network.ad_suite', 'golden_ticket',
+                                              v["domain"], v["user"], v["krbtgt"], v["domain_sid"]),
+            },
+        ],
+    },
+    {
+        "id": "opsec", "label": "OPSEC / Anon", "icon": "security", "color": "#14b8a6",
+        "tools": [
+            {
+                "id": "tor_ctrl", "name": "Tor Kontrolle", "icon": "blur_circular",
+                "badge": "🟢", "desc": "Tor starten / stoppen / neue Identity — Traffic anonymisieren",
+                "inputs": [
+                    {"id": "action", "label": "Aktion", "type": "select",
+                     "options": ["start", "new_identity", "stop", "ip_check"],
+                     "default": "start"},
+                ],
+                "run": lambda v: _tor_ctrl(v),
+            },
+            {
+                "id": "killswitch", "name": "Kill Switch", "icon": "power_off",
+                "badge": "🔴", "desc": "Blockiert alles außer Tor — verhindert IP-Leak",
+                "inputs": [
+                    {"id": "action", "label": "Aktion", "type": "select",
+                     "options": ["enable", "disable"],
+                     "default": "enable"},
+                ],
+                "run": lambda v: _killswitch(v),
+            },
+            {
+                "id": "mac_spoof", "name": "MAC Spoofing", "icon": "wifi_tethering",
+                "badge": "🟠", "desc": "Hardware-ID aller Netzwerk-Interfaces randomisieren",
+                "inputs": [
+                    {"id": "restore", "label": "Original-MAC wiederherstellen", "type": "switch", "default": False},
+                ],
+                "run": lambda v: _mac_spoof(v),
+            },
+            {
+                "id": "hostname_change", "name": "Hostname ändern", "icon": "computer",
+                "badge": "🟠", "desc": "Gerätename in Netzwerkscans verschleiern",
+                "inputs": [
+                    {"id": "name",    "label": "Neuer Name (leer = zufällig)", "type": "text", "default": ""},
+                    {"id": "restore", "label": "Auf 'kali' zurücksetzen", "type": "switch", "default": False},
+                ],
+                "run": lambda v: _hostname_change(v),
+            },
+            {
+                "id": "clean_logs", "name": "Logs & History löschen", "icon": "delete_sweep",
+                "badge": "🟡", "desc": "auth.log, syslog, wtmp, bash_history, zsh_history leeren",
+                "inputs": [],
+                "run": lambda v: _clean_logs(v),
+            },
+            {
+                "id": "session_wipe", "name": "Session Wipe", "icon": "local_fire_department",
+                "badge": "🔴", "desc": "Alle .pcap / Keys / Temp-Dateien sicher löschen",
+                "inputs": [
+                    {"id": "wipe_output", "label": "~/penkit-output/ auch löschen", "type": "switch", "default": False},
+                ],
+                "run": lambda v: _import_run('core.opsec', 'session_wipe', bool(v["wipe_output"])),
+            },
+        ],
+    },
+    {
         "id": "recon", "label": "Auto-Recon / CVE", "icon": "radar", "color": "#10b981",
         "tools": [
             {
@@ -450,23 +695,79 @@ CATEGORIES = [
         "tools": [
             {
                 "id": "arp_watch", "name": "ARP Watch", "icon": "monitor_heart",
-                "badge": "🟢", "desc": "ARP-Spoofing erkennen — Alarm bei neuem Gerät",
+                "badge": "🟢", "desc": "ARP-Spoofing live erkennen — Alarm bei neuem / verdächtigem Gerät",
                 "inputs": [
                     {"id": "iface", "label": "Interface", "type": "text", "default": "eth0"},
                 ],
                 "run": lambda v: _import_run('tools.blueteam.arp_watch', 'watch', v["iface"]),
             },
             {
-                "id": "honeypot", "name": "Honeypot", "icon": "pest_control",
-                "badge": "🟢", "desc": "Fake SSH/FTP/HTTP — loggt alle Verbindungsversuche",
+                "id": "auth_log", "name": "Auth Log Analyzer", "icon": "article",
+                "badge": "🟢", "desc": "SSH-Brute-Force, Sudo-Missbrauch, Failed Logins — historisch oder live",
                 "inputs": [
-                    {"id": "port",    "label": "Port",    "type": "number", "default": 22},
-                    {"id": "service", "label": "Dienst", "type": "select",
-                     "options": ["ssh", "ftp", "http", "smtp"],
-                     "default": "ssh"},
+                    {"id": "mode", "label": "Modus", "type": "select",
+                     "options": ["historical", "live"],
+                     "default": "historical"},
+                    {"id": "log_path", "label": "Log-Pfad (leer = auto)", "type": "text", "default": ""},
                 ],
-                "run": lambda v: _import_run('tools.blueteam.honeypot', 'start_honeypot',
-                                              v["service"], int(v["port"])),
+                "run": lambda v: _auth_log(v),
+            },
+            {
+                "id": "port_monitor", "name": "Port Monitor", "icon": "settings_ethernet",
+                "badge": "🟢", "desc": "Offene Ports baseline + Änderungen erkennen (snapshot / diff / live)",
+                "inputs": [
+                    {"id": "mode", "label": "Modus", "type": "select",
+                     "options": ["snapshot", "diff", "live"],
+                     "default": "snapshot"},
+                ],
+                "run": lambda v: _port_monitor(v),
+            },
+            {
+                "id": "honeypot", "name": "Honeypot Suite", "icon": "pest_control",
+                "badge": "🟢", "desc": "Fake SSH/HTTP/FTP/Telnet — loggt alle Verbindungsversuche + Alarm",
+                "inputs": [
+                    {"id": "ssh_port",  "label": "Fake SSH Port",    "type": "number", "default": 2222},
+                    {"id": "http_port", "label": "Fake HTTP Port",   "type": "number", "default": 8888},
+                    {"id": "ftp_port",  "label": "Fake FTP Port",    "type": "number", "default": 2121},
+                    {"id": "threshold", "label": "Alert Threshold",  "type": "number", "default": 3},
+                ],
+                "run": lambda v: _honeypot_suite(v),
+            },
+        ],
+    },
+    {
+        "id": "joker", "label": "Joker 🃏", "icon": "mood", "color": "#f59e0b",
+        "tools": [
+            {
+                "id": "kahoot", "name": "Kahoot Flooder", "icon": "school",
+                "badge": "🟡", "desc": "Kahoot-Session mit Bot-Accounts fluten (PIN + Anzahl)",
+                "inputs": [
+                    {"id": "pin",    "label": "Kahoot PIN",          "type": "text",   "default": ""},
+                    {"id": "count",  "label": "Anzahl Bots",         "type": "number", "default": 100},
+                    {"id": "prefix", "label": "Name-Prefix (leer = random)", "type": "text", "default": ""},
+                ],
+                "run": lambda v: _kahoot(v),
+            },
+            {
+                "id": "forms_bomber", "name": "Google Forms Bomber", "icon": "dynamic_form",
+                "badge": "🟡", "desc": "Google-Form mit zufälligen Antworten fluten",
+                "inputs": [
+                    {"id": "url",    "label": "Google Form URL", "type": "text",   "default": ""},
+                    {"id": "count",  "label": "Submissions",     "type": "number", "default": 50},
+                    {"id": "answer", "label": "Antwort (leer = random)", "type": "text", "default": ""},
+                ],
+                "run": lambda v: _forms_bomber(v),
+            },
+            {
+                "id": "prank", "name": "Prank Payload Generator", "icon": "celebration",
+                "badge": "🟡", "desc": "Fake BSOD, Fake Virus, Rickroll, 100 Tabs, Disco Terminal — PS1/bat/sh",
+                "inputs": [
+                    {"id": "prank", "label": "Prank", "type": "select",
+                     "options": ["fake_bsod", "fake_virus_win", "fake_update", "rickroll", "100_tabs", "disco_terminal"],
+                     "default": "fake_bsod"},
+                    {"id": "delay", "label": "Delay (Sekunden)", "type": "number", "default": 0},
+                ],
+                "run": lambda v: _prank(v),
             },
         ],
     },
@@ -554,6 +855,114 @@ async def _uac_bypass(v):
     else:
         async for line in result:
             yield line
+
+async def _mitm_bettercap(v, method):
+    from tools.mitm import BettercapEngine
+    t = BettercapEngine(v["iface"], "/tmp")
+    if method == "ssl_strip":
+        async for line in t.ssl_strip(v.get("target", "")):
+            yield line
+    elif method == "dns_poison":
+        async for line in t.dns_poison(v.get("target",""), v.get("domains","*.google.com"), v.get("redirect","")):
+            yield line
+    elif method == "harvest_creds":
+        async for line in t.harvest_creds(v.get("target", "")):
+            yield line
+    else:
+        async for line in t.arp_spoof(v.get("target", "")):
+            yield line
+
+async def _tor_ctrl(v):
+    action = v["action"]
+    if action == "start":
+        from core.anon import start_tor
+        async for line in start_tor(): yield line
+    elif action == "new_identity":
+        from core.anon import restart_tor
+        async for line in restart_tor(): yield line
+    elif action == "stop":
+        from core.anon import stop_tor
+        async for line in stop_tor(): yield line
+    elif action == "ip_check":
+        from core.anon import ip_leak_check
+        async for line in ip_leak_check(): yield line
+
+async def _killswitch(v):
+    if v["action"] == "enable":
+        from core.opsec import killswitch_enable
+        async for line in killswitch_enable(): yield line
+    else:
+        from core.opsec import killswitch_disable
+        async for line in killswitch_disable(): yield line
+
+async def _mac_spoof(v):
+    if v["restore"]:
+        from core.opsec import mac_spoof, _interfaces
+        for iface in _interfaces():
+            async for line in mac_spoof(iface, restore=True): yield line
+    else:
+        from core.opsec import mac_spoof_all
+        async for line in mac_spoof_all(): yield line
+
+async def _hostname_change(v):
+    if v["restore"]:
+        from core.opsec import hostname_restore
+        async for line in hostname_restore(): yield line
+    else:
+        from core.opsec import hostname_change
+        async for line in hostname_change(v["name"]): yield line
+
+async def _clean_logs(v):
+    from core.opsec import clean_logs, clean_history
+    async for line in clean_logs(): yield line
+    async for line in clean_history(): yield line
+
+async def _kahoot(v):
+    from tools.joker import KahootFlooder
+    t = KahootFlooder()
+    async for line in t.flood(v["pin"], int(v["count"]), v["prefix"]):
+        yield line
+
+async def _forms_bomber(v):
+    from tools.joker import GoogleFormsBomber
+    t = GoogleFormsBomber()
+    async for line in t.bomb_google(v["url"], int(v["count"]), v["answer"]):
+        yield line
+
+async def _prank(v):
+    from tools.joker import PrankPayloadGenerator
+    t = PrankPayloadGenerator()
+    async for line in t.generate(v["prank"], "/tmp", int(v["delay"]), ""):
+        yield line
+
+async def _auth_log(v):
+    from tools.blueteam import AuthLogAnalyzer
+    t = AuthLogAnalyzer()
+    if v["mode"] == "live":
+        async for line in t.live_tail(v["log_path"] or None):
+            yield line
+    else:
+        async for line in t.scan_historical(v["log_path"] or None):
+            yield line
+
+async def _port_monitor(v):
+    from tools.blueteam import PortMonitor
+    t = PortMonitor()
+    if v["mode"] == "snapshot":
+        async for line in t.snapshot():
+            yield line
+    elif v["mode"] == "diff":
+        async for line in t.diff():
+            yield line
+    else:
+        async for line in t.live_watch():
+            yield line
+
+async def _honeypot_suite(v):
+    from tools.blueteam import Honeypot
+    t = Honeypot(int(v["ssh_port"]), int(v["http_port"]), int(v["ftp_port"]), 2323, int(v["threshold"]))
+    async for line in t.start():
+        yield line
 
 async def _post_exploit(v):
     from tools.c2 import post_exploit
@@ -652,9 +1061,9 @@ def main_page():
                  transition: all 0.2s !important; padding: 0 !important; }
     .tool-card:hover { border-color: var(--accent) !important; transform: translateY(-2px);
                        box-shadow: 0 8px 24px rgba(0,255,136,0.1) !important; }
-    .tool-name { font-weight: 600; color: var(--text); font-size: 14px; }
-    .tool-desc { color: var(--text-dim); font-size: 12px; line-height: 1.5; margin-top: 4px; }
-    .badge-pill { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 99px;
+    .tool-name { font-weight: 600; color: var(--text); font-size: 17px; }
+    .tool-desc { color: var(--text-dim); font-size: 13px; line-height: 1.6; margin-top: 6px; }
+    .badge-pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px;
                   letter-spacing: 0.5px; }
     .terminal-out { background: var(--bg-terminal) !important; font-family: 'JetBrains Mono', monospace !important;
                     font-size: 12px !important; color: #00ff88 !important;
@@ -729,7 +1138,7 @@ def main_page():
 
         # Tool cards grid
         cards_area = ui.element('div').style(
-            'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px'
+            'display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px'
         )
 
         # Terminal output panel
@@ -756,9 +1165,9 @@ def main_page():
                 danger_txt = DANGER_TEXT.get(tool['badge'], '')
 
                 with ui.card().classes('tool-card').on('click', make_tool_click(tool)):
-                    with ui.element('div').style('padding:16px'):
-                        with ui.row().classes('items-center').style('margin-bottom:10px;gap:8px'):
-                            ui.icon(tool['icon']).style(f'color:{cat["color"]};font-size:20px')
+                    with ui.element('div').style('padding:22px'):
+                        with ui.row().classes('items-center').style('margin-bottom:12px;gap:10px'):
+                            ui.icon(tool['icon']).style(f'color:{cat["color"]};font-size:26px')
                             ui.html(f'<div class="tool-name">{tool["name"]}</div>')
                             ui.space()
                             ui.html(f'<div class="badge-pill" style="background:{badge_col}22;color:{badge_col}">'
