@@ -47,8 +47,8 @@ def _api(token: str, method: str, params: dict | None = None) -> dict:
 
 def validate_token(token: str) -> bool:
     """Prüft ob das Token-Format korrekt ist (keine API-Anfrage nötig)."""
-    parts = token.strip().split(":")
-    return len(parts) == 2 and parts[0].isdigit() and len(parts[1]) >= 30
+    parts = token.strip().split(":", 1)
+    return len(parts) == 2 and parts[0].isdigit() and len(parts[1]) > 0
 
 
 def get_bot_info(token: str) -> dict | None:
